@@ -1,0 +1,16 @@
+{
+  "name": "pia-personal-investor-advisor",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": "22.22.2",
+    "pnpm": ">=10.13.1 <11"
+  },
+  "scripts": {
+    "setup": "pnpm install --frozen-lockfile=false && uv sync --directory apps/api",
+    "check": "pnpm run check:web && pnpm run check:api",
+    "check:web": "pnpm --filter @pia/web check",
+    "check:api": "uv run --directory apps/api python -c \"import sys; assert sys.version_info >= (3, 11)\""
+  }
+}

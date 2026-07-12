@@ -1,0 +1,11 @@
+{
+  "name": "@pia/web",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "22.22.2"
+  },
+  "scripts": {
+    "check": "node --eval \"process.stdout.write('web workspace boundary is ready\\n')\""
+  }
+}
