@@ -1,0 +1,31 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# JavaScript
+node_modules/
+.next/
+out/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local data and imports
+data/
+imports/
+*.csv
+*.xlsx
+*.pdf
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
