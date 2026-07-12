@@ -1,0 +1,30 @@
+name: Architecture or product decision
+description: Capture a decision before work changes scope, cost, privacy, or architecture.
+title: "[DECISION] "
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What decision is needed and why now?
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options considered
+      description: Include the recommended option and its trade-offs.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Financial, privacy, and cost impact
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed decision
+    validations:
+      required: true
