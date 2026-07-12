@@ -12,6 +12,7 @@ The repository is in Phase 0: governance and foundation. Product code has not st
 
 - [Project Bible](PROJECT_BIBLE.md): stable rules, architecture, guardrails, and agent workflow.
 - [Project management guide](docs/project-management.md): GitHub Project fields, milestones, and issue conventions.
+- [PIA Roadmap](https://github.com/users/deanpm1994/projects/1): live execution tracker.
 - [Architecture overview](docs/architecture/system-overview.md): proposed system boundaries.
 - [Decision records](docs/decisions): durable technical decisions.
 - GitHub Issues: executable work.
