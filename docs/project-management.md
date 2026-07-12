@@ -37,6 +37,17 @@ Create a user Project named **PIA Roadmap** and link it to this repository. Use 
 - Set Status to Done when a linked pull request is merged.
 - Archive Done items after 30 days if the history is preserved in GitHub Issues.
 
+## Branches and pull requests
+
+Use a Gitflow-lite workflow:
+
+- `main` contains release-ready work only. Promote an accepted phase or release with a pull request from `develop` to `main`, merged with a merge commit.
+- `develop` is the shared integration branch. Every approved issue begins from the current `develop` and returns to it through a pull request.
+- Name task branches `feat/<issue>-<slug>`, `fix/<issue>-<slug>`, or `chore/<issue>-<slug>`.
+- Squash-merge task pull requests into `develop` and delete the task branch after merging.
+- Protect `main` and `develop`: pull requests and resolved conversations are required; direct pushes, force pushes, and deletions are prohibited.
+- Do not require status checks until the Phase 1 CI task provides them. Add those checks through that approved task.
+
 ## Milestones
 
 Create one milestone per roadmap phase:
