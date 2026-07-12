@@ -1,0 +1,76 @@
+name: Executable task
+description: Create a scoped, reviewable task for PIA.
+title: "[TASK] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read PROJECT_BIBLE.md before creating work. This form is for one independently reviewable unit.
+  - type: input
+    id: phase
+    attributes:
+      label: Roadmap phase
+      description: Use the relevant phase number and name.
+      placeholder: "Phase 0 — Governance"
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: State the user-visible or technical outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and boundaries
+      description: State included behavior and explicit non-goals.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Write testable checklist items.
+      placeholder: |
+        - [ ] Criterion one
+        - [ ] Criterion two
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Include tests, commands, manual checks, and expected evidence.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Highest risk
+      options:
+        - Financial
+        - Security
+        - Privacy
+        - Provider
+        - Cost
+        - UX
+        - Low
+    validations:
+      required: true
+  - type: dropdown
+    id: cost
+    attributes:
+      label: Cost impact
+      options:
+        - Zero required cost
+        - Optional paid provider
+        - Requires founder approval
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and linked ADRs
+      description: List issue numbers, architecture records, and blockers.
