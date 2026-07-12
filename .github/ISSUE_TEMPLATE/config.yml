@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: PIA Project Bible
+    url: https://github.com/deanpm1994/pia-personal-investor-advisor/blob/main/PROJECT_BIBLE.md
+    about: Read the product rules and guardrails before opening work.
