@@ -10,6 +10,10 @@
   "scripts": {
     "setup": "pnpm install --frozen-lockfile=false && uv sync --directory apps/api",
     "check": "pnpm run check:web && pnpm run check:api",
+    "dev:web": "pnpm --filter @pia/web dev",
+    "lint:web": "pnpm --filter @pia/web lint",
+    "test:web": "pnpm --filter @pia/web test:run",
+    "build:web": "pnpm --filter @pia/web build",
     "check:web": "pnpm --filter @pia/web check",
     "check:api": "uv run --directory apps/api python -c \"import sys; assert sys.version_info >= (3, 11)\""
   }

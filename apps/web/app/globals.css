@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --pia-canvas: #f4f7f8;
+  --pia-surface: #ffffff;
+  --pia-surface-muted: #eaf1f1;
+  --pia-ink: #102a33;
+  --pia-ink-muted: #5f7178;
+  --pia-border: #d4e0e0;
+  --pia-brand: #0f766e;
+  --pia-brand-soft: #d8f1eb;
+  --pia-focus: #0f766e;
+}
+
+@theme inline {
+  --color-canvas: var(--pia-canvas);
+  --color-surface: var(--pia-surface);
+  --color-surface-muted: var(--pia-surface-muted);
+  --color-ink: var(--pia-ink);
+  --color-ink-muted: var(--pia-ink-muted);
+  --color-border: var(--pia-border);
+  --color-brand: var(--pia-brand);
+  --color-brand-soft: var(--pia-brand-soft);
+  --shadow-panel: 0 16px 38px rgb(16 42 51 / 8%);
+  --radius-panel: 1.25rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--pia-canvas);
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background: var(--pia-canvas);
+  color: var(--pia-ink);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+:focus-visible {
+  outline: 3px solid var(--pia-focus);
+  outline-offset: 3px;
+}

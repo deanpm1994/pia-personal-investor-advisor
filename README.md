@@ -6,7 +6,8 @@ It is a decision-support tool. It does not execute trades or promise returns.
 
 ## Status
 
-The repository is in Phase 1: foundation. Product code has not started.
+The repository is in Phase 1: foundation. A static frontend shell is in place;
+product integrations and financial features have not started.
 
 ## Local setup
 
@@ -27,6 +28,12 @@ Run the current workspace verification from the repository root:
 
 ```sh
 pnpm check
+```
+
+Start the static frontend shell locally with:
+
+```sh
+pnpm dev:web
 ```
 
 The web and API packages are boundaries only until their separately approved shell
