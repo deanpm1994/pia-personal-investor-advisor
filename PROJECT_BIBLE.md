@@ -54,6 +54,7 @@ This file is the constitution of the project. GitHub Issues and the GitHub Proje
 
 - GitHub Issues contain executable task scope, dependencies, acceptance criteria, tests, and verification evidence.
 - GitHub Project controls status, phase, priority, risk, approval, and roadmap views.
+- [PIA Roadmap](https://github.com/users/deanpm1994/projects/1) is the live execution tracker.
 - Architecture Decision Records capture durable choices and trade-offs.
 - A task may be implemented only when its GitHub Project Approval field is Approved.
 - A task is Done only when tests, relevant reviews, documentation, and issue evidence are complete.

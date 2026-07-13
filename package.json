@@ -1,0 +1,24 @@
+{
+  "name": "pia-personal-investor-advisor",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": "22.22.2",
+    "pnpm": ">=10.13.1 <11"
+  },
+  "scripts": {
+    "setup": "pnpm install --frozen-lockfile=false && uv sync --directory apps/api",
+    "check": "pnpm run check:web && pnpm run check:api",
+    "dev:web": "pnpm --filter @pia/web dev",
+    "lint:web": "pnpm --filter @pia/web lint",
+    "test:web": "pnpm --filter @pia/web test:run",
+    "build:web": "pnpm --filter @pia/web build",
+    "check:web": "pnpm --filter @pia/web check",
+    "dev:api": "uv run --directory apps/api uvicorn pia_api.main:app --reload",
+    "lint:api": "uv run --directory apps/api ruff check .",
+    "format:api": "uv run --directory apps/api ruff format --check .",
+    "test:api": "uv run --directory apps/api pytest",
+    "check:api": "pnpm run lint:api && pnpm run format:api && pnpm run test:api"
+  }
+}
