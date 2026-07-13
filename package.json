@@ -15,6 +15,10 @@
     "test:web": "pnpm --filter @pia/web test:run",
     "build:web": "pnpm --filter @pia/web build",
     "check:web": "pnpm --filter @pia/web check",
-    "check:api": "uv run --directory apps/api python -c \"import sys; assert sys.version_info >= (3, 11)\""
+    "dev:api": "uv run --directory apps/api uvicorn pia_api.main:app --reload",
+    "lint:api": "uv run --directory apps/api ruff check .",
+    "format:api": "uv run --directory apps/api ruff format --check .",
+    "test:api": "uv run --directory apps/api pytest",
+    "check:api": "pnpm run lint:api && pnpm run format:api && pnpm run test:api"
   }
 }
