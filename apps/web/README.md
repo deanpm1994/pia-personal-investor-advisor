@@ -1,5 +1,7 @@
 # Web workspace
 
-This directory is reserved for the TypeScript-strict Next.js application in P1.2.
-It intentionally contains no application code, API calls, authentication, or runtime
-configuration in P1.1.
+This TypeScript-strict Next.js application is PIA's static Phase 1 shell.
+
+Run `pnpm --filter @pia/web dev` for local development, or `pnpm check` from the
+repository root for linting, unit tests, and a production build. The shell contains
+no authentication, API calls, charts, or financial calculations.
