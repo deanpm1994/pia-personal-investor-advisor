@@ -39,6 +39,20 @@ pnpm dev:web
 The web and API packages are boundaries only until their separately approved shell
 issues are implemented.
 
+## Local Supabase and migrations
+
+PIA's local Supabase baseline provides PostgreSQL, Auth, Storage, and the API
+without hosted credentials. Start it and upgrade the application schema with:
+
+```sh
+supabase start
+pnpm db:migrate
+```
+
+Alembic is the application-schema migration authority. See
+[Supabase local and hosted configuration](docs/supabase.md) for configuration
+boundaries and hosted setup rules.
+
 ## How work is managed
 
 - [Project Bible](PROJECT_BIBLE.md): stable rules, architecture, guardrails, and agent workflow.

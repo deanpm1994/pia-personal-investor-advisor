@@ -5,8 +5,11 @@ description = "PIA API workspace boundary"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "alembic>=1.16,<2",
     "fastapi==0.139.0",
     "pydantic-settings",
+    "psycopg[binary]>=3.2,<4",
+    "sqlalchemy>=2.0,<3",
     "uvicorn",
 ]
 

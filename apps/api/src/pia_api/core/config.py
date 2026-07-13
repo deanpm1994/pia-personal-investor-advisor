@@ -1,4 +1,4 @@
-"""Non-secret runtime configuration."""
+"""Server-side runtime configuration."""
 
 from typing import Literal
 
@@ -8,8 +8,11 @@ Environment = Literal["development", "test", "production"]
 
 
 class Settings(BaseSettings):
-    """Settings loaded only from explicit non-secret environment variables."""
+    """Settings loaded only by Python processes from explicit environment variables."""
 
     model_config = SettingsConfigDict(env_prefix="PIA_", extra="ignore")
 
     environment: Environment = "development"
+    database_url: str = (
+        "postgresql+psycopg://postgres:postgres@localhost:54322/postgres"
+    )
