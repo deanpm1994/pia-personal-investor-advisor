@@ -15,6 +15,8 @@ const foundations = [
   },
 ];
 
+import { AuthPanel } from "@/components/auth-panel";
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-canvas">
@@ -23,9 +25,12 @@ export default function Home() {
           <a className="text-lg font-semibold tracking-tight text-ink" href="#overview">
             PIA
           </a>
-          <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold tracking-wide text-brand">
-            Foundation
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold tracking-wide text-brand">
+              Foundation
+            </span>
+            <AuthPanel />
+          </div>
         </div>
       </header>
 

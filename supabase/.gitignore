@@ -6,3 +6,6 @@
 .env.keys
 .env.local
 .env.*.local
+
+# Local asymmetric signing material for Supabase Auth.
+signing_keys.json
