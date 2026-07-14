@@ -62,9 +62,26 @@ Supabase-managed schemas, including `auth` and `storage`, are never altered by
 Alembic. `supabase/config.toml` disables Supabase CLI application SQL migrations
 and seeds to prevent a second application-schema history.
 
-The P2.1 baseline contains no domain tables. The only database artifact after an
-upgrade is Alembic's version bookkeeping; later approved migrations own their
-application tables explicitly.
+P2.3 introduces the first application-owned table: `public.profiles`. It is
+keyed by `auth.users.id`, while the `auth` schema itself remains wholly
+Supabase-managed. The migration backfills existing Auth users, and a
+security-definer trigger creates a profile when Auth creates a user and
+synchronizes its email when Auth changes it. Deleting an Auth user removes the
+profile through the foreign key.
+
+`profiles` has RLS enabled and no anonymous access. Authenticated users can
+select only the row whose `id` equals `auth.uid()`; profile creation, updates,
+and deletion are not client operations. Future user-owned tables must use the
+same pattern: a non-null `user_id` foreign key to `public.profiles(id)`, RLS
+enabled, and policies whose `USING` and `WITH CHECK` clauses compare `user_id`
+with `auth.uid()`. Grant only the operations required by the policies.
+
+To run the local-Supabase isolation and migration rollback/upgrade tests after
+starting the stack and applying migrations, run from `apps/api`:
+
+```sh
+PIA_RUN_LOCAL_SUPABASE_TESTS=1 uv run pytest tests/test_profile_rls.py
+```
 
 ## Credential boundary
 

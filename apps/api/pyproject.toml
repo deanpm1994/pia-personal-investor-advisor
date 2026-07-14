@@ -33,6 +33,9 @@ packages = ["src/pia_api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "local_supabase: tests that require an explicitly enabled local Supabase stack",
+]
 
 [tool.ruff]
 target-version = "py311"
