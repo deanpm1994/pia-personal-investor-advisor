@@ -57,9 +57,10 @@ max_client_conn = 100
 # secret_key = "env(SECRET_VALUE)"
 
 [db.migrations]
-# PIA application schema history is Alembic-managed in apps/api/migrations.
-# Do not add application SQL migrations to Supabase CLI.
-enabled = false
+# Supabase migrations own only Supabase-managed infrastructure such as Storage
+# buckets and storage.objects policies. Alembic remains the sole authority for
+# PIA application-owned public schema.
+enabled = true
 
 [db.seed]
 # Application fixtures belong to their approved domain phase, not this baseline.
