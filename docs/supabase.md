@@ -50,8 +50,8 @@ environment file.
 
 ## Migration authority
 
-Alembic is the sole migration authority for PIA application-owned schema and
-RLS history. Its configuration and revisions live in `apps/api/migrations`.
+Alembic is the sole migration authority for PIA application-owned `public`
+schema and RLS history. Its configuration and revisions live in `apps/api/migrations`.
 Run the deterministic local upgrade command from the repository root:
 
 ```sh
@@ -59,8 +59,9 @@ pnpm db:migrate
 ```
 
 Supabase-managed schemas, including `auth` and `storage`, are never altered by
-Alembic. `supabase/config.toml` disables Supabase CLI application SQL migrations
-and seeds to prevent a second application-schema history.
+Alembic. Supabase CLI migrations in `supabase/migrations` are reserved strictly
+for Supabase infrastructure such as Storage buckets and `storage.objects`
+policies; they must not create application tables. See ADR 0004.
 
 P2.3 introduces the first application-owned table: `public.profiles`. It is
 keyed by `auth.users.id`, while the `auth` schema itself remains wholly

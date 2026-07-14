@@ -103,6 +103,10 @@ def test_profiles_are_created_synced_and_isolated(database_url: str) -> None:
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
             admin_connection.execute(
+                "DELETE FROM public.audit_events WHERE actor_id IN (%s, %s)",
+                (first_user, second_user),
+            )
+            admin_connection.execute(
                 "DELETE FROM auth.users WHERE id IN (%s, %s)",
                 (first_user, second_user),
             )
@@ -116,3 +120,76 @@ def test_profile_migration_downgrades_and_upgrades(database_url: str) -> None:
     config = Config("alembic.ini")
     command.downgrade(config, "20260713_01")
     command.upgrade(config, "head")
+
+
+def test_audit_events_and_raw_imports_are_owner_scoped(database_url: str) -> None:
+    """Prove audit history and private Storage objects reject other users."""
+    first_user, second_user = uuid.uuid4(), uuid.uuid4()
+
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection, first_user, f"audit-first-{first_user}@example.test"
+            )
+            _insert_auth_user(
+                admin_connection,
+                second_user,
+                f"audit-second-{second_user}@example.test",
+            )
+            event_id = admin_connection.execute(
+                """
+                INSERT INTO public.audit_events (actor_id, event_type, metadata)
+                VALUES (%s, 'raw_import.accessed', '{"source":"test"}')
+                RETURNING id
+                """,
+                (first_user,),
+            ).fetchone()[0]
+
+        with psycopg.connect(database_url) as anonymous_connection:
+            with anonymous_connection.transaction():
+                anonymous_connection.execute("SET LOCAL ROLE anon")
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    anonymous_connection.execute(
+                        "SELECT id FROM public.audit_events"
+                    ).fetchall()
+
+        with psycopg.connect(database_url) as first_connection:
+            with first_connection.transaction():
+                _as_authenticated_user(first_connection, first_user)
+                assert first_connection.execute(
+                    "SELECT id FROM public.audit_events"
+                ).fetchall() == [(event_id,)]
+                first_connection.execute(
+                    """
+                    INSERT INTO storage.objects (bucket_id, name, owner)
+                    VALUES ('raw-imports', %s, %s)
+                    """,
+                    (f"{first_user}/fixture.csv", first_user),
+                )
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    first_connection.execute(
+                        "DELETE FROM public.audit_events WHERE id = %s", (event_id,)
+                    )
+
+        with psycopg.connect(database_url) as second_connection:
+            with second_connection.transaction():
+                _as_authenticated_user(second_connection, second_user)
+                assert (
+                    second_connection.execute(
+                        "SELECT id FROM public.audit_events"
+                    ).fetchall()
+                    == []
+                )
+                assert (
+                    second_connection.execute(
+                        "SELECT name FROM storage.objects "
+                        "WHERE bucket_id = 'raw-imports'"
+                    ).fetchall()
+                    == []
+                )
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id IN (%s, %s)",
+                (first_user, second_user),
+            )
