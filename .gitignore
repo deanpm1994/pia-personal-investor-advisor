@@ -21,6 +21,7 @@ venv/
 # Local data and imports
 data/
 imports/
+lessons/
 *.csv
 *.xlsx
 *.pdf
