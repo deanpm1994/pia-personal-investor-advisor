@@ -19,6 +19,7 @@
     "lint:api": "uv run --directory apps/api ruff check .",
     "format:api": "uv run --directory apps/api ruff format --check .",
     "test:api": "uv run --directory apps/api pytest",
-    "check:api": "pnpm run lint:api && pnpm run format:api && pnpm run test:api"
+    "check:api": "pnpm run lint:api && pnpm run format:api && pnpm run test:api",
+    "db:migrate": "uv run --directory apps/api alembic upgrade head"
   }
 }

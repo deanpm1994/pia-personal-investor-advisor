@@ -5,14 +5,18 @@ description = "PIA API workspace boundary"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "alembic>=1.16,<2",
     "fastapi==0.139.0",
+    "httpx>=0.28,<1",
     "pydantic-settings",
+    "psycopg[binary]>=3.2,<4",
+    "PyJWT[crypto]>=2.10,<3",
+    "sqlalchemy>=2.0,<3",
     "uvicorn",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx",
     "pytest",
     "ruff",
 ]
@@ -29,6 +33,9 @@ packages = ["src/pia_api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "local_supabase: tests that require an explicitly enabled local Supabase stack",
+]
 
 [tool.ruff]
 target-version = "py311"
