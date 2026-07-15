@@ -84,6 +84,18 @@ starting the stack and applying migrations, run from `apps/api`:
 PIA_RUN_LOCAL_SUPABASE_TESTS=1 uv run pytest tests/test_profile_rls.py
 ```
 
+## Pull-request security integration
+
+The `Supabase security integration` job in the pull-request workflow creates
+only ephemeral local Supabase state. It prepares the ignored local signing key,
+starts Supabase, applies the infrastructure and Alembic migration histories,
+and runs the API quality suite plus the opt-in ownership, audit-event, and
+private-storage authorization tests.
+
+After this job succeeds on a pull request, configure `Supabase security
+integration` as a required check for `develop` and `main`. Do not make it a
+required check before its first successful run.
+
 ## Credential boundary
 
 `PIA_DATABASE_URL` is server-only configuration. It is read by Python API and
