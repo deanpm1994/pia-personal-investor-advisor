@@ -77,6 +77,14 @@ same pattern: a non-null `user_id` foreign key to `public.profiles(id)`, RLS
 enabled, and policies whose `USING` and `WITH CHECK` clauses compare `user_id`
 with `auth.uid()`. Grant only the operations required by the policies.
 
+P3.3 adds the owner-scoped canonical ledger tables: financial accounts,
+instruments, immutable financial events, and normalized event legs. Authenticated
+clients can select and append only rows whose `user_id` equals `auth.uid()`;
+they cannot update or delete ledger history. Database constraints preserve
+owner-consistent references, Decimal-backed numeric facts, source identity, and
+the event/leg shapes established in ADR 0005. No browser or API ledger-writing
+endpoint is introduced by this schema boundary.
+
 To run the local-Supabase isolation and migration rollback/upgrade tests after
 starting the stack and applying migrations, run from `apps/api`:
 
