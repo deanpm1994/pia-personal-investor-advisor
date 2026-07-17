@@ -1,0 +1,51 @@
+{
+  "profile": "trade-republic-csv-v1",
+  "observed_type_mappings": {
+    "CUSTOMER_INBOUND": "deposit",
+    "TRANSFER_INBOUND": "deposit",
+    "TRANSFER_INSTANT_INBOUND": "deposit",
+    "TRANSFER_OUTBOUND": "withdrawal",
+    "TRANSFER_INSTANT_OUTBOUND": "withdrawal",
+    "BUY": "buy",
+    "SELL": "sell",
+    "DIVIDEND": "dividend",
+    "INTEREST_PAYMENT": "interest"
+  },
+  "observed_expected_events": [
+    {"transaction_id": "synthetic-tr-customer-in", "component": "base", "event_reference": "synthetic-tr-customer-in:base", "event_type": "deposit"},
+    {"transaction_id": "synthetic-tr-transfer-in", "component": "base", "event_reference": "synthetic-tr-transfer-in:base", "event_type": "deposit"},
+    {"transaction_id": "synthetic-tr-instant-in", "component": "base", "event_reference": "synthetic-tr-instant-in:base", "event_type": "deposit"},
+    {"transaction_id": "synthetic-tr-transfer-out", "component": "base", "event_reference": "synthetic-tr-transfer-out:base", "event_type": "withdrawal"},
+    {"transaction_id": "synthetic-tr-instant-out", "component": "base", "event_reference": "synthetic-tr-instant-out:base", "event_type": "withdrawal"},
+    {"transaction_id": "synthetic-tr-buy", "component": "base", "event_reference": "synthetic-tr-buy:base", "event_type": "buy"},
+    {"transaction_id": "synthetic-tr-buy", "component": "fee", "event_reference": "synthetic-tr-buy:fee", "event_type": "fee"},
+    {"transaction_id": "synthetic-tr-sell", "component": "base", "event_reference": "synthetic-tr-sell:base", "event_type": "sell"},
+    {"transaction_id": "synthetic-tr-sell", "component": "fee", "event_reference": "synthetic-tr-sell:fee", "event_type": "fee"},
+    {"transaction_id": "synthetic-tr-dividend", "component": "base", "event_reference": "synthetic-tr-dividend:base", "event_type": "dividend"},
+    {"transaction_id": "synthetic-tr-dividend", "component": "withholding-tax", "event_reference": "synthetic-tr-dividend:withholding-tax", "event_type": "withholding_tax"},
+    {"transaction_id": "synthetic-tr-interest", "component": "base", "event_reference": "synthetic-tr-interest:base", "event_type": "interest"},
+    {"transaction_id": "synthetic-tr-fx-dividend", "component": "base", "event_reference": "synthetic-tr-fx-dividend:base", "event_type": "dividend", "native_cash": {"amount": "10.00", "currency": "USD"}, "source_reported_eur": {"amount": "9.20", "fx_rate": "0.9200", "datetime": "2026-07-01T12:00:00Z"}}
+  ],
+  "extension_profile": "trade-republic-csv-v1-phase3-test-only-extension",
+  "extension_expected_events": [
+    {"transaction_id": "synthetic-extension-fx", "component": "base", "event_reference": "synthetic-extension-fx:base", "event_type": "source_reported_fx_conversion"},
+    {"transaction_id": "synthetic-extension-split", "component": "base", "event_reference": "synthetic-extension-split:base", "event_type": "stock_split"},
+    {"transaction_id": "synthetic-extension-correction", "component": "base", "event_reference": "synthetic-extension-correction:base", "event_type": "correction", "correction_of_transaction_id": "synthetic-tr-customer-in"},
+    {"transaction_id": "synthetic-extension-reversal", "component": "base", "event_reference": "synthetic-extension-reversal:base", "event_type": "reversal", "reversal_of_transaction_id": "synthetic-tr-customer-in"}
+  ],
+  "malformed": [
+    {"fixture": "malformed/missing-header.csv", "diagnostic_code": "TRCSV001_MISSING_HEADER"},
+    {"fixture": "malformed/reordered-header.csv", "diagnostic_code": "TRCSV002_REORDERED_HEADER"},
+    {"fixture": "malformed/unknown-header.csv", "diagnostic_code": "TRCSV003_UNKNOWN_HEADER"},
+    {"fixture": "malformed/blank-transaction-id.csv", "diagnostic_code": "TRCSV004_BLANK_TRANSACTION_ID"},
+    {"fixture": "malformed/invalid-datetime.csv", "diagnostic_code": "TRCSV005_INVALID_DATETIME"},
+    {"fixture": "malformed/date-mismatch.csv", "diagnostic_code": "TRCSV006_DATE_MISMATCH"},
+    {"fixture": "malformed/invalid-decimal.csv", "diagnostic_code": "TRCSV007_INVALID_DECIMAL"},
+    {"fixture": "malformed/invalid-sign.csv", "diagnostic_code": "TRCSV008_INVALID_SIGN"},
+    {"fixture": "malformed/incomplete-fx-triple.csv", "diagnostic_code": "TRCSV009_INCOMPLETE_FX_TRIPLE"},
+    {"fixture": "malformed/missing-security-identifier.csv", "diagnostic_code": "TRCSV010_MISSING_SECURITY_IDENTIFIER"},
+    {"fixture": "malformed/missing-shares.csv", "diagnostic_code": "TRCSV011_MISSING_SHARES"},
+    {"fixture": "malformed/invalid-fee-tax-sign.csv", "diagnostic_code": "TRCSV012_FEE_OR_TAX_SIGN"},
+    {"fixture": "malformed/unsupported-observed-types.csv", "diagnostic_code": "TRCSV013_UNSUPPORTED_SOURCE_TYPE"}
+  ]
+}
