@@ -1,0 +1,5 @@
+datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,original_amount,original_currency,fx_rate,description,transaction_id,counterparty_name,counterparty_iban,payment_reference,mcc_code
+2026-07-02T09:00:00Z,2026-07-02,DEFAULT,CASH,FX_CONVERSION,,,,,,9.20,,,EUR,10.00,USD,0.9200,Synthetic extension FX,synthetic-extension-fx,,,,
+2026-07-02T09:01:00Z,2026-07-02,DEFAULT,SECURITY,STOCK_SPLIT,STOCK,Synthetic Alpha,SYNTH-ALPHA,4.000,,,,,EUR,,,,Synthetic extension split,synthetic-extension-split,,,,
+2026-07-02T09:02:00Z,2026-07-02,DEFAULT,CASH,CORRECTION,,,,,,1.00,,,EUR,,,,Synthetic extension correction,synthetic-extension-correction,,,,
+2026-07-02T09:03:00Z,2026-07-02,DEFAULT,CASH,REVERSAL,,,,,,-1.00,,,EUR,,,,Synthetic extension reversal,synthetic-extension-reversal,,,,
