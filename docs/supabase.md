@@ -85,6 +85,17 @@ owner-consistent references, Decimal-backed numeric facts, source identity, and
 the event/leg shapes established in ADR 0005. No browser or API ledger-writing
 endpoint is introduced by this schema boundary.
 
+P4.2 adds five application-owned staged-import tables for the private Trade
+Republic CSV workflow: imports, exactly-one file metadata records, source and
+normalized rows, diagnostics, and immutable state events. The raw CSV itself
+continues to live only in the existing private `raw-imports` Storage bucket;
+Alembic stores its owner-prefixed path and metadata, never a public URL or raw
+content. Clients can select and append only their own staged-import rows, and
+the database enforces `staged → parsed → validated → review_ready → confirmed`
+or `staged → parsed → validated → blocked`; terminal states cannot transition.
+This is a persistence boundary only—there is no upload UI, parser, review API,
+or ledger write path yet.
+
 To run the local-Supabase isolation and migration rollback/upgrade tests after
 starting the stack and applying migrations, run from `apps/api`:
 
