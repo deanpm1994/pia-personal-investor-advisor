@@ -144,6 +144,10 @@ fixture-contract codes for P4.3; they are not a public HTTP response schema.
 | `TRCSV011_MISSING_SHARES` | A `BUY` or `SELL` has blank, zero, negative, or invalid `shares`. |
 | `TRCSV012_FEE_OR_TAX_SIGN` | A nonzero `fee` or `tax` is positive. |
 | `TRCSV013_UNSUPPORTED_SOURCE_TYPE` | The source `type` is outside the strict observed mapping. |
+| `TRCSV014_DUPLICATE_SOURCE_IDENTITY` | A base, fee, or withholding-tax source reference duplicates an earlier row in the same batch. |
+| `TRCSV015_ROW_SHAPE` | A data row is not an RFC 4180 record with exactly 23 fields. |
+| `TRCSV016_INVALID_CURRENCY` | A required currency is missing or is not an ISO-style three-letter uppercase code. |
+| `TRCSV017_INVALID_FX_EVIDENCE` | Complete source-reported FX fields do not meet the documented EUR or positive-rate requirements. |
 
 The synthetic corpus is under
 `apps/api/tests/fixtures/trade_republic_csv_v1/`. Its `expected-events.json`
