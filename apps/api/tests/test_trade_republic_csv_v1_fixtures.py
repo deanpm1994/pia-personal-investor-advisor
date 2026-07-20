@@ -37,7 +37,7 @@ HEADER = (
     "payment_reference",
     "mcc_code",
 )
-DIAGNOSTIC_CODES = {
+FIXTURE_DIAGNOSTIC_CODES = {
     "TRCSV001_MISSING_HEADER",
     "TRCSV002_REORDERED_HEADER",
     "TRCSV003_UNKNOWN_HEADER",
@@ -51,6 +51,12 @@ DIAGNOSTIC_CODES = {
     "TRCSV011_MISSING_SHARES",
     "TRCSV012_FEE_OR_TAX_SIGN",
     "TRCSV013_UNSUPPORTED_SOURCE_TYPE",
+}
+DOCUMENTED_DIAGNOSTIC_CODES = FIXTURE_DIAGNOSTIC_CODES | {
+    "TRCSV014_DUPLICATE_SOURCE_IDENTITY",
+    "TRCSV015_ROW_SHAPE",
+    "TRCSV016_INVALID_CURRENCY",
+    "TRCSV017_INVALID_FX_EVIDENCE",
 }
 
 
@@ -176,7 +182,7 @@ def test_fixture_values_are_synthetic_and_sensitive_columns_are_blank() -> None:
 def test_manifest_declares_every_expected_diagnostic_code() -> None:
     manifest = _manifest()
     expected_codes = {item["diagnostic_code"] for item in manifest["malformed"]}
-    assert expected_codes == DIAGNOSTIC_CODES
+    assert expected_codes == FIXTURE_DIAGNOSTIC_CODES
     document = MAPPING_DOCUMENT.read_text()
-    for code in DIAGNOSTIC_CODES:
+    for code in DOCUMENTED_DIAGNOSTIC_CODES:
         assert code in document
