@@ -2,7 +2,7 @@
 
 from typing import Annotated, Protocol
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from pia_api.core.auth import AuthenticatedUser, get_authenticated_user
