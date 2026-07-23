@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from pia_api.core.auth import AuthenticatedUser, get_authenticated_user
+from pia_api.services.staged_imports import StagedImportNotConfiguredError
 
 router = APIRouter()
 
@@ -66,7 +67,13 @@ async def stage_import(
     content = await request.body()
     if not content:
         raise HTTPException(status_code=422, detail="CSV upload is empty")
-    return await gateway.stage(user, filename, content_type, content)
+    try:
+        return await gateway.stage(user, filename, content_type, content)
+    except StagedImportNotConfiguredError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Import staging is unavailable",
+        ) from error
 
 
 @router.get("/v1/imports/{import_id}", response_model=ImportReviewResponse)

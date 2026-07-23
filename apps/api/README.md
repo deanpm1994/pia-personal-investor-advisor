@@ -14,8 +14,7 @@ It returns a deterministic, non-financial response:
 ```
 
 `PIA_ENVIRONMENT` controls the response environment and accepts `development`
-(the default), `test`, or `production`. The service does not load dotenv files or
-require credentials.
+(the default), `test`, or `production`. The service does not load dotenv files.
 
 From the repository root, run the API locally and verify it with:
 
@@ -36,12 +35,16 @@ curl http://127.0.0.1:8000/health
 ## Browser import flow
 
 The web import-review flow calls the API from `http://localhost:3000`. Start
-both services during local development:
+local Supabase, then both services during local development:
 
 ```sh
+supabase start
 pnpm dev:api
 pnpm dev:web
 ```
+
+`pnpm dev:api` obtains the running local stack's public anon key for the API
+process. It never reads a service-role key or browser environment file.
 
 `PIA_WEB_ORIGIN` defaults to `http://localhost:3000` and is the only browser
 origin allowed to send authenticated import requests. Set it explicitly in the

@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from pia_api.core.auth import AuthenticatedUser
 from pia_api.core.config import Settings
 from pia_api.main import create_app
+from pia_api.services.staged_imports import StagedImportNotConfiguredError
 
 
 @dataclass
@@ -53,6 +54,16 @@ class Verifier:
             raise InvalidTokenError("bad")
         user_id = "owner" if token == "owner-token" else "other"
         return AuthenticatedUser(id=user_id, email=f"{user_id}@example.test")
+
+
+class UnavailableGateway:
+    async def stage(self, _user, _filename, _content_type, _content):
+        raise StagedImportNotConfiguredError(
+            "Supabase import staging is not configured"
+        )
+
+    async def review(self, _user, _import_id):
+        return None
 
 
 def test_import_routes_require_authentication_and_never_return_raw_rows():
@@ -124,3 +135,23 @@ def test_import_routes_allow_the_configured_browser_origin():
 
     assert blocked.status_code == 400
     assert "access-control-allow-origin" not in blocked.headers
+
+
+def test_import_routes_report_unconfigured_staging_without_a_server_error():
+    app = create_app()
+    app.state.jwt_verifier = Verifier()
+    app.state.import_gateway = UnavailableGateway()
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/imports",
+        content=b"csv",
+        headers={
+            "Authorization": "Bearer owner-token",
+            "X-Import-Filename": "history.csv",
+            "Content-Type": "text/csv",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Import staging is unavailable"

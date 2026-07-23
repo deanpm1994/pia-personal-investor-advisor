@@ -11,13 +11,19 @@ from pia_api.core.config import Settings
 from pia_api.providers.trade_republic_csv import parse_trade_republic_csv
 
 
+class StagedImportNotConfiguredError(RuntimeError):
+    """Raised when the API lacks the public Supabase gateway configuration."""
+
+
 class SupabaseStagedImportGateway:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
     def _headers(self, user: AuthenticatedUser) -> dict[str, str]:
         if not self._settings.supabase_anon_key or not user.access_token:
-            raise RuntimeError("Supabase import staging is not configured")
+            raise StagedImportNotConfiguredError(
+                "Supabase import staging is not configured"
+            )
         return {
             "apikey": self._settings.supabase_anon_key,
             "Authorization": f"Bearer {user.access_token}",
