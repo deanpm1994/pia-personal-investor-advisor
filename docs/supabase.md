@@ -48,6 +48,11 @@ The browser uses these public values exclusively. Never add the service-role
 key, database password, signing key, or hosted credentials to a browser
 environment file.
 
+The local Auth issuer is explicitly `http://localhost:54321/auth/v1`, matching
+the API verifier's default `PIA_SUPABASE_URL`. Keep these origins aligned; a
+`localhost`/`127.0.0.1` mismatch makes otherwise valid browser sessions fail
+API JWT issuer validation.
+
 ## Migration authority
 
 Alembic is the sole migration authority for PIA application-owned `public`
