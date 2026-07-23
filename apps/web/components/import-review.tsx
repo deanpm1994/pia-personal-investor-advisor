@@ -155,8 +155,8 @@ export function ImportReview() {
                   {event.event_type}: {event.source_identity.event_reference}
                 </p>
               ))}
-              {row.diagnostics.map((diagnostic) => (
-                <p className="text-red-700" key={diagnostic.code}>
+              {row.diagnostics.map((diagnostic, index) => (
+                <p className="text-red-700" key={`${diagnostic.code}-${index}`}>
                   {diagnostic.code}: {diagnostic.message}
                 </p>
               ))}

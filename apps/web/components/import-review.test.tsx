@@ -113,6 +113,40 @@ describe("ImportReview", () => {
     expect(screen.getByRole("button", { name: "Confirmation available in the next step" })).toBeDisabled();
   });
 
+  it("renders every diagnostic when a row has repeated diagnostic codes", async () => {
+    getClient.mockReturnValue(signedInClient() as never);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...validReview,
+          confirmation_eligible: false,
+          diagnostic_count: 2,
+          rows: [
+            {
+              row_number: 2,
+              events: [],
+              diagnostics: [
+                { code: "TRCSV008_INVALID_SIGN", message: "First sign mismatch" },
+                { code: "TRCSV008_INVALID_SIGN", message: "Second sign mismatch" },
+              ],
+            },
+          ],
+        }),
+        { status: 201 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ImportReview />);
+
+    chooseCsv();
+
+    expect(await screen.findByText("TRCSV008_INVALID_SIGN: First sign mismatch")).toBeInTheDocument();
+    expect(screen.getByText("TRCSV008_INVALID_SIGN: Second sign mismatch")).toBeInTheDocument();
+    expect(consoleError.mock.calls.flat().join(" ")).not.toContain("same key");
+    consoleError.mockRestore();
+  });
+
   it("shows a staging failure when the upload request cannot complete", async () => {
     getClient.mockReturnValue(signedInClient() as never);
     fetchMock.mockRejectedValue(new TypeError("Network unavailable"));
