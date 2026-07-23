@@ -16,6 +16,7 @@ const foundations = [
 ];
 
 import { AuthPanel } from "@/components/auth-panel";
+import { ImportReview } from "@/components/import-review";
 
 export default function Home() {
   return (
@@ -63,6 +64,7 @@ export default function Home() {
               evidence, and decision support—never automatic trading.
             </p>
           </section>
+          <ImportReview />
 
           <section aria-labelledby="foundation-heading" className="mt-6 sm:mt-8">
             <div className="flex items-baseline justify-between gap-4">
