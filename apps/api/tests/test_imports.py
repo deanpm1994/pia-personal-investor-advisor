@@ -23,7 +23,7 @@ class Gateway:
         }
 
     async def review(self, user, import_id):
-        if import_id != "import-1":
+        if import_id != "import-1" or user.id != "owner":
             return None
         return {
             "id": import_id,
@@ -46,11 +46,12 @@ class Gateway:
 
 class Verifier:
     async def verify(self, token):
-        if token != "owner-token":
+        if token not in {"owner-token", "other-token"}:
             from jwt import InvalidTokenError
 
             raise InvalidTokenError("bad")
-        return AuthenticatedUser(id="owner", email="owner@example.test")
+        user_id = "owner" if token == "owner-token" else "other"
+        return AuthenticatedUser(id=user_id, email=f"{user_id}@example.test")
 
 
 def test_import_routes_require_authentication_and_never_return_raw_rows():
@@ -76,6 +77,12 @@ def test_import_routes_require_authentication_and_never_return_raw_rows():
     )
     assert review.status_code == 200
     assert "source_row" not in str(review.json())
+    assert (
+        client.get(
+            "/v1/imports/import-1", headers={"Authorization": "Bearer other-token"}
+        ).status_code
+        == 404
+    )
     assert (
         client.get(
             "/v1/imports/other", headers={"Authorization": "Bearer owner-token"}
