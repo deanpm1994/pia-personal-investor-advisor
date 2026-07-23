@@ -122,7 +122,7 @@ describe("ImportReview", () => {
     chooseCsv();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to stage this CSV. Check the file and try again.",
+      "Unable to stage this CSV. Make sure the PIA API is running and try again.",
     );
   });
 

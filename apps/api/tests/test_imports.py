@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from fastapi.testclient import TestClient
 
 from pia_api.core.auth import AuthenticatedUser
+from pia_api.core.config import Settings
 from pia_api.main import create_app
 
 
@@ -89,3 +90,37 @@ def test_import_routes_require_authentication_and_never_return_raw_rows():
         ).status_code
         == 404
     )
+
+
+def test_import_routes_allow_the_configured_browser_origin():
+    app = create_app(Settings(web_origin="http://localhost:3000"))
+    client = TestClient(app)
+
+    response = client.options(
+        "/v1/imports",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": (
+                "authorization,content-type,x-import-filename"
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "POST" in response.headers["access-control-allow-methods"]
+    assert (
+        "x-import-filename" in response.headers["access-control-allow-headers"].lower()
+    )
+
+    blocked = client.options(
+        "/v1/imports",
+        headers={
+            "Origin": "https://untrusted.example.test",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert blocked.status_code == 400
+    assert "access-control-allow-origin" not in blocked.headers

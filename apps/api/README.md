@@ -32,3 +32,18 @@ With the server running, check the route using:
 ```sh
 curl http://127.0.0.1:8000/health
 ```
+
+## Browser import flow
+
+The web import-review flow calls the API from `http://localhost:3000`. Start
+both services during local development:
+
+```sh
+pnpm dev:api
+pnpm dev:web
+```
+
+`PIA_WEB_ORIGIN` defaults to `http://localhost:3000` and is the only browser
+origin allowed to send authenticated import requests. Set it explicitly in the
+server environment when the web app uses a different origin; do not use a
+wildcard origin.

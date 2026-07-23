@@ -68,7 +68,7 @@ export function ImportReview() {
       setState("empty");
     } catch {
       setState("error");
-      setMessage("Unable to stage this CSV. Check the file and try again.");
+      setMessage("Unable to stage this CSV. Make sure the PIA API is running and try again.");
     }
   }
 
