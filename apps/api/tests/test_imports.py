@@ -5,7 +5,10 @@ from fastapi.testclient import TestClient
 from pia_api.core.auth import AuthenticatedUser
 from pia_api.core.config import Settings
 from pia_api.main import create_app
-from pia_api.services.staged_imports import StagedImportNotConfiguredError
+from pia_api.services.staged_imports import (
+    StagedImportConfirmationError,
+    StagedImportNotConfiguredError,
+)
 
 
 @dataclass
@@ -45,6 +48,19 @@ class Gateway:
             ],
         }
 
+    async def confirm(self, user, import_id):
+        if import_id != "import-1" or user.id != "owner":
+            return None
+        return {
+            "id": import_id,
+            "status": "confirmed",
+            "row_count": 1,
+            "event_count": 1,
+            "diagnostic_count": 0,
+            "confirmation_eligible": False,
+            "rows": [],
+        }
+
 
 class Verifier:
     async def verify(self, token):
@@ -64,6 +80,16 @@ class UnavailableGateway:
 
     async def review(self, _user, _import_id):
         return None
+
+    async def confirm(self, _user, _import_id):
+        raise StagedImportNotConfiguredError(
+            "Supabase import staging is not configured"
+        )
+
+
+class ConflictGateway(Gateway):
+    async def confirm(self, _user, _import_id):
+        raise StagedImportConfirmationError("not ready")
 
 
 def test_import_routes_require_authentication_and_never_return_raw_rows():
@@ -101,6 +127,46 @@ def test_import_routes_require_authentication_and_never_return_raw_rows():
         ).status_code
         == 404
     )
+
+
+def test_import_confirmation_requires_the_owner_and_returns_confirmed_review():
+    app = create_app()
+    app.state.jwt_verifier = Verifier()
+    app.state.import_gateway = Gateway([])
+    client = TestClient(app)
+
+    assert client.post("/v1/imports/import-1/confirm").status_code == 401
+    assert (
+        client.post(
+            "/v1/imports/import-1/confirm",
+            headers={"Authorization": "Bearer other-token"},
+        ).status_code
+        == 404
+    )
+
+    response = client.post(
+        "/v1/imports/import-1/confirm",
+        headers={"Authorization": "Bearer owner-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "confirmed"
+    assert response.json()["confirmation_eligible"] is False
+
+
+def test_import_confirmation_reports_a_non_confirmable_batch_without_server_error():
+    app = create_app()
+    app.state.jwt_verifier = Verifier()
+    app.state.import_gateway = ConflictGateway([])
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/imports/import-1/confirm",
+        headers={"Authorization": "Bearer owner-token"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "not ready"
 
 
 def test_import_routes_allow_the_configured_browser_origin():

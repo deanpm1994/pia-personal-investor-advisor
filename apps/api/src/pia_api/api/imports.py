@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from pia_api.core.auth import AuthenticatedUser, get_authenticated_user
-from pia_api.services.staged_imports import StagedImportNotConfiguredError
+from pia_api.services.staged_imports import (
+    StagedImportConfirmationError,
+    StagedImportNotConfiguredError,
+)
 
 router = APIRouter()
 
@@ -38,6 +41,10 @@ class StagedImportGateway(Protocol):
     ) -> dict[str, object]: ...
 
     async def review(
+        self, user: AuthenticatedUser, import_id: str
+    ) -> dict[str, object] | None: ...
+
+    async def confirm(
         self, user: AuthenticatedUser, import_id: str
     ) -> dict[str, object] | None: ...
 
@@ -84,6 +91,29 @@ async def get_import_review(
 ) -> dict[str, object]:
     """Return a normalized owner-scoped review without raw CSV contents."""
     review = await gateway.review(user, import_id)
+    if review is None:
+        raise HTTPException(status_code=404, detail="Staged import not found")
+    return review
+
+
+@router.post("/v1/imports/{import_id}/confirm", response_model=ImportReviewResponse)
+async def confirm_import(
+    import_id: str,
+    user: Annotated[AuthenticatedUser, Depends(get_authenticated_user)],
+    gateway: Annotated[StagedImportGateway, Depends(_gateway)],
+) -> dict[str, object]:
+    """Atomically persist one eligible staged import for its authenticated owner."""
+    try:
+        review = await gateway.confirm(user, import_id)
+    except StagedImportNotConfiguredError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Import confirmation is unavailable",
+        ) from error
+    except StagedImportConfirmationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(error)
+        ) from error
     if review is None:
         raise HTTPException(status_code=404, detail="Staged import not found")
     return review

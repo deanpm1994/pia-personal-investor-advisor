@@ -15,6 +15,10 @@ class StagedImportNotConfiguredError(RuntimeError):
     """Raised when the API lacks the public Supabase gateway configuration."""
 
 
+class StagedImportConfirmationError(RuntimeError):
+    """Raised when a staged import cannot safely transition to confirmed."""
+
+
 class SupabaseStagedImportGateway:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -221,6 +225,30 @@ class SupabaseStagedImportGateway:
             "confirmation_eligible": status == "review_ready",
             "rows": review_rows,
         }
+
+    async def confirm(
+        self, user: AuthenticatedUser, import_id: str
+    ) -> dict[str, object] | None:
+        """Run the database-owned confirmation transaction for one owner import."""
+        headers = self._headers(user)
+        base = self._settings.supabase_url.rstrip("/") + "/rest/v1"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{base}/rpc/confirm_staged_import",
+                json={"p_staged_import_id": import_id},
+                headers=headers,
+            )
+            if response.status_code >= 400:
+                detail = response.json()
+                code = detail.get("code") if isinstance(detail, dict) else None
+                if code == "P0002":
+                    return None
+                if code == "P0001":
+                    raise StagedImportConfirmationError(
+                        "This import cannot be confirmed in its current state"
+                    )
+                response.raise_for_status()
+        return await self.review(user, import_id)
 
     async def _post(
         self,
