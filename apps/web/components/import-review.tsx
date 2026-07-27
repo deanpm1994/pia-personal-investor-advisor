@@ -31,6 +31,7 @@ export function ImportReview() {
   const [review, setReview] = useState<Review>();
   const [state, setState] = useState<ReviewState>("empty");
   const [message, setMessage] = useState("");
+  const [confirmationMessage, setConfirmationMessage] = useState("");
   const [loadingMessage, setLoadingMessage] = useState("");
   const apiUrl = process.env.NEXT_PUBLIC_PIA_API_URL ?? "http://localhost:8000";
 
@@ -42,6 +43,7 @@ export function ImportReview() {
   async function upload(file: File) {
     setState("loading");
     setMessage("");
+    setConfirmationMessage("");
     setLoadingMessage("Staging import…");
     const token = await accessToken();
     if (!token) {
@@ -76,6 +78,7 @@ export function ImportReview() {
     if (!review) return;
     setState("loading");
     setMessage("");
+    setConfirmationMessage("");
     setLoadingMessage("Refreshing import status…");
     const token = await accessToken();
     if (!token) {
@@ -97,6 +100,37 @@ export function ImportReview() {
     } catch {
       setState("error");
       setMessage("Import status is stale. Refresh after reconnecting.");
+    }
+  }
+
+  async function confirm() {
+    if (!review) return;
+    setState("loading");
+    setMessage("");
+    setConfirmationMessage("");
+    setLoadingMessage("Confirming import…");
+    const token = await accessToken();
+    if (!token) {
+      setState("error");
+      setMessage("Sign in before confirming an import.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/v1/imports/${review.id}/confirm`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        throw new Error("Import confirmation failed");
+      }
+
+      setReview((await response.json()) as Review);
+      setState("empty");
+      setConfirmationMessage("Import confirmed. Ledger events were recorded.");
+    } catch {
+      setState("error");
+      setMessage("Unable to confirm this import. Refresh or retry safely to check its status.");
     }
   }
 
@@ -134,6 +168,11 @@ export function ImportReview() {
           {message}
         </p>
       )}
+      {confirmationMessage && state === "empty" && (
+        <p className="mt-3 text-sm text-emerald-700" role="status">
+          {confirmationMessage}
+        </p>
+      )}
       {!review && state === "empty" && (
         <p className="mt-3 text-sm text-ink-muted">No staged import selected.</p>
       )}
@@ -164,10 +203,11 @@ export function ImportReview() {
           ))}
           <button
             className="rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-            disabled={!review.confirmation_eligible}
+            disabled={state === "loading" || !review.confirmation_eligible}
+            onClick={() => void confirm()}
             type="button"
           >
-            Confirmation available in the next step
+            Confirm import
           </button>
         </div>
       )}
