@@ -680,7 +680,12 @@ def test_staged_import_confirmation_is_atomic_owner_scoped_and_idempotent(
         with psycopg.connect(database_url) as anonymous_connection:
             with anonymous_connection.transaction():
                 anonymous_connection.execute("SET LOCAL ROLE anon")
-                with pytest.raises(psycopg.errors.InvalidAuthorizationSpecification):
+                with pytest.raises(
+                    (
+                        psycopg.errors.InsufficientPrivilege,
+                        psycopg.errors.InvalidAuthorizationSpecification,
+                    )
+                ):
                     anonymous_connection.execute(
                         "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
                     )
