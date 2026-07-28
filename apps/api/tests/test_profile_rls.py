@@ -1,7 +1,9 @@
 """Local-Supabase integration checks for owner-scoped persistence boundaries."""
 
+import asyncio
 import os
 import uuid
+from pathlib import Path
 
 import psycopg
 import pytest
@@ -15,6 +17,8 @@ from financial_fixtures import (
 
 from pia_api.core.config import Settings
 from pia_api.domain.financial_events import CashLeg
+from pia_api.providers.trade_republic_csv import parse_trade_republic_csv
+from pia_api.services.staged_imports import TrustedStagedImportWriter
 
 pytestmark = pytest.mark.local_supabase
 
@@ -60,16 +64,25 @@ def _as_authenticated_user(
 
 
 def _create_review_ready_import(
-    connection: psycopg.Connection[object], user_id: uuid.UUID, parsed_output: str
+    connection: psycopg.Connection[object],
+    user_id: uuid.UUID,
+    parsed_output: str,
+    *,
+    trusted: bool = True,
 ) -> uuid.UUID:
-    """Append one synthetic, review-ready staged import for confirmation tests."""
+    """Persist a synthetic review-ready import through the trusted test boundary."""
     import_id = connection.execute(
         """
-        INSERT INTO public.staged_imports (user_id, source_provider, source_format)
-        VALUES (%s, 'trade-republic', 'trade-republic-csv-v1')
+        INSERT INTO public.staged_imports (
+            user_id, source_provider, source_format, trusted_staged_at
+        )
+        VALUES (
+            %s, 'trade-republic', 'trade-republic-csv-v1',
+            CASE WHEN %s THEN timezone('utc', now()) END
+        )
         RETURNING id
         """,
-        (user_id,),
+        (user_id, trusted),
     ).fetchone()[0]
     object_path = f"{user_id}/imports/{import_id}.csv"
     connection.execute(
@@ -182,10 +195,10 @@ def test_profile_migration_downgrades_and_upgrades(database_url: str) -> None:
     command.upgrade(config, "head")
 
 
-def test_staged_imports_are_owner_scoped_and_append_only(
+def test_staged_imports_are_owner_scoped_and_not_client_writable(
     database_url: str,
 ) -> None:
-    """Prove staged-import clients may append only their private import history."""
+    """Prove clients can review only their own server-persisted import history."""
     first_user, second_user = uuid.uuid4(), uuid.uuid4()
     staged_import_id: uuid.UUID
     staged_row_id: uuid.UUID
@@ -223,27 +236,26 @@ def test_staged_imports_are_owner_scoped_and_append_only(
                                 f"SELECT id FROM public.{table}"
                             ).fetchall()
 
-        with psycopg.connect(database_url) as first_connection:
-            with first_connection.transaction():
-                _as_authenticated_user(first_connection, first_user)
-                staged_import_id = first_connection.execute(
+        with psycopg.connect(database_url) as admin_connection:
+            with admin_connection.transaction():
+                staged_import_id = admin_connection.execute(
                     """
                     INSERT INTO public.staged_imports (
-                        user_id, source_provider, source_format
+                        user_id, source_provider, source_format, trusted_staged_at
                     )
-                    VALUES (%s, 'trade_republic', 'csv_v1')
+                    VALUES (%s, 'trade_republic', 'csv_v1', timezone('utc', now()))
                     RETURNING id
                     """,
                     (first_user,),
                 ).fetchone()[0]
-                first_connection.execute(
+                admin_connection.execute(
                     """
                     INSERT INTO storage.objects (bucket_id, name, owner)
                     VALUES ('raw-imports', %s, %s)
                     """,
                     (f"{first_user}/imports/fixture.csv", first_user),
                 )
-                staged_file_id = first_connection.execute(
+                staged_file_id = admin_connection.execute(
                     """
                     INSERT INTO public.staged_import_files (
                         user_id, staged_import_id, bucket_id, object_path, filename,
@@ -260,7 +272,7 @@ def test_staged_imports_are_owner_scoped_and_append_only(
                         "a" * 64,
                     ),
                 ).fetchone()[0]
-                staged_row_id = first_connection.execute(
+                staged_row_id = admin_connection.execute(
                     """
                     INSERT INTO public.staged_import_rows (
                         user_id, staged_import_id, source_row_number, source_row,
@@ -272,7 +284,7 @@ def test_staged_imports_are_owner_scoped_and_append_only(
                     """,
                     (first_user, staged_import_id),
                 ).fetchone()[0]
-                validation_result_id = first_connection.execute(
+                validation_result_id = admin_connection.execute(
                     """
                     INSERT INTO public.staged_import_validation_results (
                         user_id, staged_import_id, staged_import_row_id, code,
@@ -284,7 +296,7 @@ def test_staged_imports_are_owner_scoped_and_append_only(
                     """,
                     (first_user, staged_import_id, staged_row_id),
                 ).fetchone()[0]
-                state_event_id = first_connection.execute(
+                state_event_id = admin_connection.execute(
                     """
                     INSERT INTO public.staged_import_state_events (
                         user_id, staged_import_id, position, state
@@ -315,6 +327,42 @@ def test_staged_imports_are_owner_scoped_and_append_only(
                                 "WHERE id = %s",
                                 (expected_id,),
                             )
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    with first_connection.transaction():
+                        first_connection.execute(
+                            """
+                            INSERT INTO public.staged_imports (
+                                user_id, source_provider, source_format
+                            )
+                            VALUES (%s, 'trade-republic', 'fabricated')
+                            """,
+                            (first_user,),
+                        )
+                for statement, parameters in (
+                    (
+                        """
+                        INSERT INTO public.staged_import_rows (
+                            user_id, staged_import_id, source_row_number, source_row,
+                            parsed_output
+                        )
+                        VALUES (%s, %s, 99, '{"Transaction ID":"forged"}',
+                                '{"candidates":[]}')
+                        """,
+                        (first_user, staged_import_id),
+                    ),
+                    (
+                        """
+                        INSERT INTO public.staged_import_state_events (
+                            user_id, staged_import_id, position, state
+                        )
+                        VALUES (%s, %s, 2, 'parsed')
+                        """,
+                        (first_user, staged_import_id),
+                    ),
+                ):
+                    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                        with first_connection.transaction():
+                            first_connection.execute(statement, parameters)
                     with pytest.raises(psycopg.errors.InsufficientPrivilege):
                         with first_connection.transaction():
                             first_connection.execute(
@@ -616,6 +664,7 @@ def test_staged_import_confirmation_is_atomic_owner_scoped_and_idempotent(
             {"kind":"instrument","direction":"in","instrument_id":"US0378331005","quantity":{"value":"0.125000"}}
         ]
     }]}"""
+    import_id: uuid.UUID
 
     try:
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
@@ -627,6 +676,11 @@ def test_staged_import_confirmation_is_atomic_owner_scoped_and_idempotent(
                 other_user_id,
                 f"confirm-other-{other_user_id}@example.test",
             )
+        with psycopg.connect(database_url) as admin_connection:
+            with admin_connection.transaction():
+                import_id = _create_review_ready_import(
+                    admin_connection, owner_id, valid_candidate
+                )
 
         with psycopg.connect(database_url) as owner_connection:
             with owner_connection.transaction():
@@ -634,9 +688,6 @@ def test_staged_import_confirmation_is_atomic_owner_scoped_and_idempotent(
                 owner_connection.execute(
                     "INSERT INTO public.financial_accounts (user_id) VALUES (%s)",
                     (owner_id,),
-                )
-                import_id = _create_review_ready_import(
-                    owner_connection, owner_id, valid_candidate
                 )
                 assert owner_connection.execute(
                     "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
@@ -705,6 +756,60 @@ def test_staged_import_confirmation_is_atomic_owner_scoped_and_idempotent(
             )
 
 
+def test_trusted_parser_staging_can_be_confirmed(database_url: str) -> None:
+    """The API's server-only writer produces confirmation-eligible evidence."""
+    owner_id = uuid.uuid4()
+    content = (
+        Path(__file__).parent / "fixtures/trade_republic_csv_v1/accepted-observed.csv"
+    ).read_bytes()
+    batch = parse_trade_republic_csv(content)
+    import_id = str(uuid.uuid4())
+
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection, owner_id, f"trusted-stage-{owner_id}@example.test"
+            )
+
+        asyncio.run(
+            TrustedStagedImportWriter(Settings()).stage(
+                user_id=str(owner_id),
+                import_id=import_id,
+                path=f"{owner_id}/imports/{import_id}.csv",
+                filename="accepted-observed.csv",
+                content_type="text/csv",
+                content=content,
+                batch=batch,
+            )
+        )
+
+        with psycopg.connect(database_url) as owner_connection:
+            with owner_connection.transaction():
+                _as_authenticated_user(owner_connection, owner_id)
+                owner_connection.execute(
+                    "INSERT INTO public.financial_accounts (user_id) VALUES (%s)",
+                    (owner_id,),
+                )
+                assert owner_connection.execute(
+                    """
+                    SELECT trusted_staged_at IS NOT NULL
+                    FROM public.staged_imports WHERE id = %s
+                    """,
+                    (import_id,),
+                ).fetchone() == (True,)
+                assert owner_connection.execute(
+                    "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
+                ).fetchone() == (
+                    sum(len(row.candidates) for row in batch.rows),
+                    False,
+                )
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id = %s", (owner_id,)
+            )
+
+
 def test_staged_import_confirmation_rolls_back_on_invalid_ledger_history(
     database_url: str,
 ) -> None:
@@ -717,12 +822,18 @@ def test_staged_import_confirmation_rolls_back_on_invalid_ledger_history(
         "occurred_at":"2026-07-20T12:00:00+00:00",
         "legs":[]
     }]}"""
+    import_id: uuid.UUID
 
     try:
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
             _insert_auth_user(
                 admin_connection, owner_id, f"confirm-rollback-{owner_id}@example.test"
             )
+        with psycopg.connect(database_url) as admin_connection:
+            with admin_connection.transaction():
+                import_id = _create_review_ready_import(
+                    admin_connection, owner_id, invalid_candidate
+                )
 
         with psycopg.connect(database_url) as owner_connection:
             with owner_connection.transaction():
@@ -730,9 +841,6 @@ def test_staged_import_confirmation_rolls_back_on_invalid_ledger_history(
                 owner_connection.execute(
                     "INSERT INTO public.financial_accounts (user_id) VALUES (%s)",
                     (owner_id,),
-                )
-                import_id = _create_review_ready_import(
-                    owner_connection, owner_id, invalid_candidate
                 )
                 with pytest.raises(psycopg.errors.RaiseException):
                     with owner_connection.transaction():
@@ -757,6 +865,71 @@ def test_staged_import_confirmation_rolls_back_on_invalid_ledger_history(
                     "SELECT count(*) FROM public.audit_events WHERE actor_id = %s",
                     (owner_id,),
                 ).fetchone() == (0,)
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id = %s", (owner_id,)
+            )
+
+
+def test_confirmation_rejects_fabricated_review_ready_import_without_provenance(
+    database_url: str,
+) -> None:
+    """A legacy or fabricated review-ready batch cannot create ledger history."""
+    owner_id = uuid.uuid4()
+    fabricated_candidate = """
+    {"candidates":[{
+        "source_identity":{"provider":"trade-republic","event_reference":"forged"},
+        "event_type":"deposit",
+        "occurred_at":"2026-07-20T12:00:00+00:00",
+        "legs":[
+            {"kind":"cash","direction":"in","money":{"amount":"12.34","currency":"EUR"}}
+        ]
+    }]}"""
+
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection, owner_id, f"forged-import-{owner_id}@example.test"
+            )
+        with psycopg.connect(database_url) as admin_connection:
+            with admin_connection.transaction():
+                import_id = _create_review_ready_import(
+                    admin_connection,
+                    owner_id,
+                    fabricated_candidate,
+                    trusted=False,
+                )
+
+        with psycopg.connect(database_url) as owner_connection:
+            with owner_connection.transaction():
+                _as_authenticated_user(owner_connection, owner_id)
+                owner_connection.execute(
+                    "INSERT INTO public.financial_accounts (user_id) VALUES (%s)",
+                    (owner_id,),
+                )
+                with pytest.raises(psycopg.errors.RaiseException):
+                    with owner_connection.transaction():
+                        owner_connection.execute(
+                            "SELECT * FROM public.confirm_staged_import(%s)",
+                            (import_id,),
+                        )
+                assert owner_connection.execute(
+                    "SELECT count(*) FROM public.financial_events "
+                    "WHERE staged_import_id = %s",
+                    (import_id,),
+                ).fetchone() == (0,)
+                assert owner_connection.execute(
+                    "SELECT count(*) FROM public.audit_events WHERE actor_id = %s",
+                    (owner_id,),
+                ).fetchone() == (0,)
+                assert owner_connection.execute(
+                    """
+                    SELECT state FROM public.staged_import_state_events
+                    WHERE staged_import_id = %s ORDER BY position DESC LIMIT 1
+                    """,
+                    (import_id,),
+                ).fetchone() == ("review_ready",)
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
             admin_connection.execute(

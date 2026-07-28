@@ -100,11 +100,12 @@ Republic CSV workflow: imports, exactly-one file metadata records, source and
 normalized rows, diagnostics, and immutable state events. The raw CSV itself
 continues to live only in the existing private `raw-imports` Storage bucket;
 Alembic stores its owner-prefixed path and metadata, never a public URL or raw
-content. Clients can select and append only their own staged-import rows, and
-the database enforces `staged → parsed → validated → review_ready → confirmed`
-or `staged → parsed → validated → blocked`; terminal states cannot transition.
-This is a persistence boundary only—there is no upload UI, parser, review API,
-or ledger write path yet.
+content. As decided in ADR 0006, clients can select only their own staged data;
+the Python API persists parser output and validation evidence through its
+server-only database connection. The database enforces
+`staged → parsed → validated → review_ready → confirmed` or
+`staged → parsed → validated → blocked`; confirmation additionally requires
+server-written provenance, so a client cannot manufacture a review-ready batch.
 
 To run the local-Supabase isolation and migration rollback/upgrade tests after
 starting the stack and applying migrations, run from `apps/api`:
