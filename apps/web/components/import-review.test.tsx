@@ -74,7 +74,7 @@ describe("ImportReview", () => {
     chooseCsv();
 
     expect(await screen.findByText("buy: TR-1")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirmation available in the next step" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Confirm import" })).toBeEnabled();
     expect(screen.queryByText("synthetic csv")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/v1/imports",
@@ -110,7 +110,54 @@ describe("ImportReview", () => {
     chooseCsv();
 
     expect(await screen.findByText("TRCSV007: Invalid amount")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirmation available in the next step" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirm import" })).toBeDisabled();
+  });
+
+  it("confirms an eligible import and shows the durable confirmation result", async () => {
+    getClient.mockReturnValue(signedInClient() as never);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(validReview), { status: 201 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ ...validReview, status: "confirmed", confirmation_eligible: false }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ImportReview />);
+
+    chooseCsv();
+    await screen.findByText("buy: TR-1");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm import" }));
+
+    expect(await screen.findByText("Import confirmed. Ledger events were recorded.")).toHaveTextContent(
+      "Import confirmed. Ledger events were recorded.",
+    );
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "http://localhost:8000/v1/imports/import-1/confirm",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer owner-token" },
+        method: "POST",
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Confirm import" })).toBeDisabled();
+  });
+
+  it("reports a confirmation failure without claiming ledger status", async () => {
+    getClient.mockReturnValue(signedInClient() as never);
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(validReview), { status: 201 }))
+      .mockResolvedValueOnce(new Response("conflict", { status: 409 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ImportReview />);
+
+    chooseCsv();
+    await screen.findByText("buy: TR-1");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm import" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to confirm this import. Refresh or retry safely to check its status.",
+    );
   });
 
   it("renders every diagnostic when a row has repeated diagnostic codes", async () => {

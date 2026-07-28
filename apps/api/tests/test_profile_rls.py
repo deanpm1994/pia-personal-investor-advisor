@@ -59,6 +59,58 @@ def _as_authenticated_user(
     )
 
 
+def _create_review_ready_import(
+    connection: psycopg.Connection[object], user_id: uuid.UUID, parsed_output: str
+) -> uuid.UUID:
+    """Append one synthetic, review-ready staged import for confirmation tests."""
+    import_id = connection.execute(
+        """
+        INSERT INTO public.staged_imports (user_id, source_provider, source_format)
+        VALUES (%s, 'trade-republic', 'trade-republic-csv-v1')
+        RETURNING id
+        """,
+        (user_id,),
+    ).fetchone()[0]
+    object_path = f"{user_id}/imports/{import_id}.csv"
+    connection.execute(
+        "INSERT INTO storage.objects (bucket_id, name, owner) VALUES "
+        "('raw-imports', %s, %s)",
+        (object_path, user_id),
+    )
+    connection.execute(
+        """
+        INSERT INTO public.staged_import_files (
+            user_id, staged_import_id, bucket_id, object_path, filename,
+            content_type, byte_size, sha256
+        )
+        VALUES (%s, %s, 'raw-imports', %s, 'fixture.csv', 'text/csv', 42, %s)
+        """,
+        (user_id, import_id, object_path, "a" * 64),
+    )
+    connection.execute(
+        """
+        INSERT INTO public.staged_import_rows (
+            user_id, staged_import_id, source_row_number, source_row, parsed_output
+        )
+        VALUES (%s, %s, 2, '{"Transaction ID":"fixture-1"}', %s::jsonb)
+        """,
+        (user_id, import_id, parsed_output),
+    )
+    for position, state in enumerate(
+        ("staged", "parsed", "validated", "review_ready"), start=1
+    ):
+        connection.execute(
+            """
+            INSERT INTO public.staged_import_state_events (
+                user_id, staged_import_id, position, state
+            )
+            VALUES (%s, %s, %s, %s)
+            """,
+            (user_id, import_id, position, state),
+        )
+    return import_id
+
+
 def test_profiles_are_created_synced_and_isolated(database_url: str) -> None:
     """Prove Auth synchronization, anonymous denial, and cross-user RLS denial."""
     first_user, second_user = uuid.uuid4(), uuid.uuid4()
@@ -542,6 +594,169 @@ def test_staged_import_constraints_preserve_private_audit_history(
                     "raw-imports",
                     f"{owner_id}/imports/constraints.csv",
                 )
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id = %s", (owner_id,)
+            )
+
+
+def test_staged_import_confirmation_is_atomic_owner_scoped_and_idempotent(
+    database_url: str,
+) -> None:
+    """Confirm only one owner's valid import and preserve its durable evidence."""
+    owner_id, other_user_id = uuid.uuid4(), uuid.uuid4()
+    valid_candidate = """
+    {"candidates":[{
+        "source_identity":{"provider":"trade-republic","event_reference":"TR-1:base"},
+        "event_type":"buy",
+        "occurred_at":"2026-07-20T12:00:00+00:00",
+        "legs":[
+            {"kind":"cash","direction":"out","money":{"amount":"12.3400","currency":"EUR"}},
+            {"kind":"instrument","direction":"in","instrument_id":"US0378331005","quantity":{"value":"0.125000"}}
+        ]
+    }]}"""
+
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection, owner_id, f"confirm-owner-{owner_id}@example.test"
+            )
+            _insert_auth_user(
+                admin_connection,
+                other_user_id,
+                f"confirm-other-{other_user_id}@example.test",
+            )
+
+        with psycopg.connect(database_url) as owner_connection:
+            with owner_connection.transaction():
+                _as_authenticated_user(owner_connection, owner_id)
+                owner_connection.execute(
+                    "INSERT INTO public.financial_accounts (user_id) VALUES (%s)",
+                    (owner_id,),
+                )
+                import_id = _create_review_ready_import(
+                    owner_connection, owner_id, valid_candidate
+                )
+                assert owner_connection.execute(
+                    "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
+                ).fetchone() == (1, False)
+                assert owner_connection.execute(
+                    """
+                    SELECT source_event_reference, staged_import_id
+                    FROM public.financial_events
+                    WHERE staged_import_id = %s
+                    """,
+                    (import_id,),
+                ).fetchone() == ("TR-1:base", import_id)
+                assert owner_connection.execute(
+                    "SELECT count(*) FROM public.financial_event_legs"
+                ).fetchone() == (2,)
+                assert owner_connection.execute(
+                    """
+                    SELECT state, details FROM public.staged_import_state_events
+                    WHERE staged_import_id = %s ORDER BY position DESC LIMIT 1
+                    """,
+                    (import_id,),
+                ).fetchone() == ("confirmed", {"event_count": 1})
+                assert owner_connection.execute(
+                    """
+                    SELECT event_type, metadata FROM public.audit_events
+                    WHERE actor_id = %s
+                    """,
+                    (owner_id,),
+                ).fetchone() == (
+                    "import.confirmed",
+                    {"staged_import_id": str(import_id), "event_count": 1},
+                )
+                assert owner_connection.execute(
+                    "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
+                ).fetchone() == (1, True)
+                assert owner_connection.execute(
+                    "SELECT count(*) FROM public.audit_events WHERE actor_id = %s",
+                    (owner_id,),
+                ).fetchone() == (1,)
+
+        with psycopg.connect(database_url) as anonymous_connection:
+            with anonymous_connection.transaction():
+                anonymous_connection.execute("SET LOCAL ROLE anon")
+                with pytest.raises(
+                    (
+                        psycopg.errors.InsufficientPrivilege,
+                        psycopg.errors.InvalidAuthorizationSpecification,
+                    )
+                ):
+                    anonymous_connection.execute(
+                        "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
+                    )
+
+        with psycopg.connect(database_url) as other_connection:
+            with other_connection.transaction():
+                _as_authenticated_user(other_connection, other_user_id)
+                with pytest.raises(psycopg.errors.NoDataFound):
+                    other_connection.execute(
+                        "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
+                    )
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id IN (%s, %s)",
+                (owner_id, other_user_id),
+            )
+
+
+def test_staged_import_confirmation_rolls_back_on_invalid_ledger_history(
+    database_url: str,
+) -> None:
+    """A deferred ledger failure must retain review_ready with no partial writes."""
+    owner_id = uuid.uuid4()
+    invalid_candidate = """
+    {"candidates":[{
+        "source_identity":{"provider":"trade-republic","event_reference":"TR-broken:base"},
+        "event_type":"deposit",
+        "occurred_at":"2026-07-20T12:00:00+00:00",
+        "legs":[]
+    }]}"""
+
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection, owner_id, f"confirm-rollback-{owner_id}@example.test"
+            )
+
+        with psycopg.connect(database_url) as owner_connection:
+            with owner_connection.transaction():
+                _as_authenticated_user(owner_connection, owner_id)
+                owner_connection.execute(
+                    "INSERT INTO public.financial_accounts (user_id) VALUES (%s)",
+                    (owner_id,),
+                )
+                import_id = _create_review_ready_import(
+                    owner_connection, owner_id, invalid_candidate
+                )
+                with pytest.raises(psycopg.errors.RaiseException):
+                    with owner_connection.transaction():
+                        owner_connection.execute(
+                            "SELECT * FROM public.confirm_staged_import(%s)",
+                            (import_id,),
+                        )
+                        owner_connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
+                assert owner_connection.execute(
+                    "SELECT count(*) FROM public.financial_events "
+                    "WHERE staged_import_id = %s",
+                    (import_id,),
+                ).fetchone() == (0,)
+                assert owner_connection.execute(
+                    """
+                    SELECT state FROM public.staged_import_state_events
+                    WHERE staged_import_id = %s ORDER BY position DESC LIMIT 1
+                    """,
+                    (import_id,),
+                ).fetchone() == ("review_ready",)
+                assert owner_connection.execute(
+                    "SELECT count(*) FROM public.audit_events WHERE actor_id = %s",
+                    (owner_id,),
+                ).fetchone() == (0,)
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
             admin_connection.execute(
