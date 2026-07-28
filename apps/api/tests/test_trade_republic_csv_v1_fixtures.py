@@ -51,12 +51,14 @@ FIXTURE_DIAGNOSTIC_CODES = {
     "TRCSV011_MISSING_SHARES",
     "TRCSV012_FEE_OR_TAX_SIGN",
     "TRCSV013_UNSUPPORTED_SOURCE_TYPE",
+    "TRCSV015_ROW_SHAPE",
 }
 DOCUMENTED_DIAGNOSTIC_CODES = FIXTURE_DIAGNOSTIC_CODES | {
     "TRCSV014_DUPLICATE_SOURCE_IDENTITY",
     "TRCSV015_ROW_SHAPE",
     "TRCSV016_INVALID_CURRENCY",
     "TRCSV017_INVALID_FX_EVIDENCE",
+    "TRCSV018_INVALID_ENCODING",
 }
 
 
@@ -111,7 +113,16 @@ def test_fixtures_use_observed_header_except_declared_failures() -> None:
 
 
 def test_declared_data_rows_preserve_the_23_column_shape() -> None:
+    malformed = _manifest()["malformed"]
+    non_record_fixtures = {
+        item["fixture"]
+        for item in malformed
+        if item["diagnostic_code"] == "TRCSV015_ROW_SHAPE"
+    }
     for fixture_path in FIXTURE_ROOT.rglob("*.csv"):
+        relative_path = str(fixture_path.relative_to(FIXTURE_ROOT))
+        if relative_path in non_record_fixtures:
+            continue
         if _detect_header(fixture_path) is not None:
             continue
         with fixture_path.open(encoding="utf-8-sig", newline="") as fixture_file:
@@ -165,7 +176,16 @@ def test_manifest_component_references_are_deterministic_and_complete() -> None:
 
 
 def test_fixture_values_are_synthetic_and_sensitive_columns_are_blank() -> None:
+    malformed = _manifest()["malformed"]
+    non_record_fixtures = {
+        item["fixture"]
+        for item in malformed
+        if item["diagnostic_code"] == "TRCSV015_ROW_SHAPE"
+    }
     for fixture_path in FIXTURE_ROOT.rglob("*.csv"):
+        relative_path = str(fixture_path.relative_to(FIXTURE_ROOT))
+        if relative_path in non_record_fixtures:
+            continue
         if _detect_header(fixture_path) is not None:
             continue
         for row in _read_csv(fixture_path):
@@ -186,3 +206,10 @@ def test_manifest_declares_every_expected_diagnostic_code() -> None:
     document = MAPPING_DOCUMENT.read_text()
     for code in DOCUMENTED_DIAGNOSTIC_CODES:
         assert code in document
+    assert manifest["file_malformed"] == [
+        {
+            "fixture": "malformed/invalid-utf8.hex",
+            "encoding": "hex",
+            "diagnostic_code": "TRCSV018_INVALID_ENCODING",
+        }
+    ]

@@ -203,10 +203,14 @@ class SupabaseStagedImportGateway:
             )
             states.raise_for_status()
         by_row: defaultdict[str, list[dict[str, str]]] = defaultdict(list)
+        batch_diagnostics: list[dict[str, str]] = []
         for item in diagnostics.json():
-            by_row[item.get("staged_import_row_id")].append(
-                {"code": item["code"], "message": item["message"]}
-            )
+            diagnostic = {"code": item["code"], "message": item["message"]}
+            row_id = item.get("staged_import_row_id")
+            if row_id is None:
+                batch_diagnostics.append(diagnostic)
+            else:
+                by_row[row_id].append(diagnostic)
         review_rows = [
             {
                 "row_number": row["source_row_number"],
@@ -223,6 +227,7 @@ class SupabaseStagedImportGateway:
             "event_count": sum(len(row["events"]) for row in review_rows),
             "diagnostic_count": len(diagnostics.json()),
             "confirmation_eligible": status == "review_ready",
+            "diagnostics": batch_diagnostics,
             "rows": review_rows,
         }
 

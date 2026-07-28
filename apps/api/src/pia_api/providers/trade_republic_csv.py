@@ -68,6 +68,7 @@ DIAGNOSTIC_DUPLICATE_SOURCE_IDENTITY = "TRCSV014_DUPLICATE_SOURCE_IDENTITY"
 DIAGNOSTIC_ROW_SHAPE = "TRCSV015_ROW_SHAPE"
 DIAGNOSTIC_INVALID_CURRENCY = "TRCSV016_INVALID_CURRENCY"
 DIAGNOSTIC_INVALID_FX_EVIDENCE = "TRCSV017_INVALID_FX_EVIDENCE"
+DIAGNOSTIC_INVALID_ENCODING = "TRCSV018_INVALID_ENCODING"
 
 _DECIMAL = re.compile(r"^-?\d+(?:\.\d+)?$")
 _CURRENCY = re.compile(r"^[A-Z]{3}$")
@@ -143,18 +144,45 @@ def parse_trade_republic_csv(
 ) -> TradeRepublicCsvStagedBatch:
     """Parse only the documented dialect into staged candidates without persistence."""
     if isinstance(source, bytes):
-        source = source.decode("utf-8-sig")
+        try:
+            source = source.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return TradeRepublicCsvStagedBatch(
+                diagnostics=(
+                    TradeRepublicCsvDiagnostic(
+                        code=DIAGNOSTIC_INVALID_ENCODING,
+                        message=(
+                            "CSV file must be valid UTF-8, with an optional UTF-8 BOM"
+                        ),
+                    ),
+                )
+            )
     if not isinstance(source, str):
         raise TypeError("source must be UTF-8 CSV text or bytes")
-
-    try:
-        records = list(csv.reader(io.StringIO(source, newline="")))
-    except csv.Error as error:
+    if not _is_rfc4180_syntax(source):
         return TradeRepublicCsvStagedBatch(
             diagnostics=(
                 TradeRepublicCsvDiagnostic(
                     code=DIAGNOSTIC_ROW_SHAPE,
-                    message=f"CSV syntax is invalid: {error}",
+                    message=(
+                        "CSV syntax is invalid; use RFC 4180 quoting and LF or CRLF "
+                        "line endings"
+                    ),
+                ),
+            )
+        )
+
+    try:
+        records = list(csv.reader(io.StringIO(source, newline=""), strict=True))
+    except csv.Error:
+        return TradeRepublicCsvStagedBatch(
+            diagnostics=(
+                TradeRepublicCsvDiagnostic(
+                    code=DIAGNOSTIC_ROW_SHAPE,
+                    message=(
+                        "CSV syntax is invalid; use RFC 4180 quoting and LF or "
+                        "CRLF line endings"
+                    ),
                 ),
             )
         )
@@ -197,6 +225,66 @@ def parse_trade_republic_csv(
         staged_rows.append(staged_row)
 
     return TradeRepublicCsvStagedBatch(rows=tuple(staged_rows))
+
+
+def _is_rfc4180_syntax(source: str) -> bool:
+    """Reject quote and line-ending forms accepted by Python's permissive CSV reader."""
+    state = "field_start"
+    index = 0
+    while index < len(source):
+        character = source[index]
+        if state == "field_start":
+            if character == '"':
+                state = "quoted"
+            elif character == ",":
+                pass
+            elif character == "\n":
+                pass
+            elif character == "\r":
+                if not _is_crlf(source, index):
+                    return False
+                index += 1
+            else:
+                state = "unquoted"
+        elif state == "unquoted":
+            if character == '"':
+                return False
+            if character == ",":
+                state = "field_start"
+            elif character == "\n":
+                state = "field_start"
+            elif character == "\r":
+                if not _is_crlf(source, index):
+                    return False
+                state = "field_start"
+                index += 1
+        elif state == "quoted":
+            if character == '"':
+                state = "after_quote"
+            elif character == "\r":
+                if not _is_crlf(source, index):
+                    return False
+                index += 1
+        else:  # state == "after_quote"
+            if character == '"':
+                state = "quoted"
+            elif character == ",":
+                state = "field_start"
+            elif character == "\n":
+                state = "field_start"
+            elif character == "\r":
+                if not _is_crlf(source, index):
+                    return False
+                state = "field_start"
+                index += 1
+            else:
+                return False
+        index += 1
+    return state != "quoted"
+
+
+def _is_crlf(source: str, index: int) -> bool:
+    return index + 1 < len(source) and source[index + 1] == "\n"
 
 
 def _validate_header(header: list[str]) -> TradeRepublicCsvDiagnostic | None:

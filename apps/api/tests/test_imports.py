@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
@@ -8,6 +9,7 @@ from pia_api.main import create_app
 from pia_api.services.staged_imports import (
     StagedImportConfirmationError,
     StagedImportNotConfiguredError,
+    SupabaseStagedImportGateway,
 )
 
 
@@ -37,6 +39,12 @@ class Gateway:
             "event_count": 0,
             "diagnostic_count": 1,
             "confirmation_eligible": False,
+            "diagnostics": [
+                {
+                    "code": "TRCSV018_INVALID_ENCODING",
+                    "message": "CSV file must be valid UTF-8",
+                }
+            ],
             "rows": [
                 {
                     "row_number": 2,
@@ -114,6 +122,11 @@ def test_import_routes_require_authentication_and_never_return_raw_rows():
         "/v1/imports/import-1", headers={"Authorization": "Bearer owner-token"}
     )
     assert review.status_code == 200
+    assert review.json()["status"] == "blocked"
+    assert review.json()["confirmation_eligible"] is False
+    assert review.json()["diagnostics"] == [
+        {"code": "TRCSV018_INVALID_ENCODING", "message": "CSV file must be valid UTF-8"}
+    ]
     assert "source_row" not in str(review.json())
     assert (
         client.get(
@@ -221,3 +234,100 @@ def test_import_routes_report_unconfigured_staging_without_a_server_error():
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Import staging is unavailable"
+
+
+def test_gateway_stages_invalid_encoding_as_a_safe_blocked_review(monkeypatch) -> None:
+    class Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class FakeAsyncClient:
+        calls: list[tuple[str, str, object]] = []
+
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, **kwargs):
+            payload = kwargs.get("json", kwargs.get("content"))
+            self.calls.append(("POST", url, payload))
+            if url.endswith("/staged_import_rows"):
+                return Response([{"id": "row-2"}])
+            return Response([])
+
+        async def get(self, url, **kwargs):
+            self.calls.append(("GET", url, kwargs.get("params")))
+            if url.endswith("/staged_imports"):
+                return Response([{"id": "import-1"}])
+            if url.endswith("/staged_import_rows"):
+                return Response([])
+            if url.endswith("/staged_import_validation_results"):
+                return Response(
+                    [
+                        {
+                            "staged_import_row_id": None,
+                            "code": "TRCSV018_INVALID_ENCODING",
+                            "message": "CSV file must be valid UTF-8",
+                        }
+                    ]
+                )
+            if url.endswith("/staged_import_state_events"):
+                return Response([{"state": "blocked"}])
+            raise AssertionError(f"Unexpected GET request: {url}")
+
+    monkeypatch.setattr(
+        "pia_api.services.staged_imports.httpx.AsyncClient", FakeAsyncClient
+    )
+    gateway = SupabaseStagedImportGateway(
+        Settings(supabase_url="https://supabase.example.test", supabase_anon_key="anon")
+    )
+
+    review = asyncio.run(
+        gateway.stage(
+            AuthenticatedUser(
+                id="owner", email="owner@example.test", access_token="token"
+            ),
+            "history.csv",
+            "text/csv",
+            b"\xff",
+        )
+    )
+
+    assert review == {
+        "id": review["id"],
+        "status": "blocked",
+        "row_count": 0,
+        "event_count": 0,
+        "diagnostic_count": 1,
+        "confirmation_eligible": False,
+        "diagnostics": [
+            {
+                "code": "TRCSV018_INVALID_ENCODING",
+                "message": "CSV file must be valid UTF-8",
+            }
+        ],
+        "rows": [],
+    }
+    posted_validation = next(
+        payload
+        for method, url, payload in FakeAsyncClient.calls
+        if method == "POST" and url.endswith("/staged_import_validation_results")
+    )
+    assert "staged_import_row_id" not in posted_validation
+    assert "source_row" not in str(review)
+    assert any(
+        payload["state"] == "blocked"
+        for method, url, payload in FakeAsyncClient.calls
+        if method == "POST" and url.endswith("/staged_import_state_events")
+    )

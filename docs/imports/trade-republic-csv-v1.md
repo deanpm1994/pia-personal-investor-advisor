@@ -148,6 +148,7 @@ fixture-contract codes for P4.3; they are not a public HTTP response schema.
 | `TRCSV015_ROW_SHAPE` | A data row is not an RFC 4180 record with exactly 23 fields. |
 | `TRCSV016_INVALID_CURRENCY` | A required currency is missing or is not an ISO-style three-letter uppercase code. |
 | `TRCSV017_INVALID_FX_EVIDENCE` | Complete source-reported FX fields do not meet the documented EUR or positive-rate requirements. |
+| `TRCSV018_INVALID_ENCODING` | The file cannot be decoded as UTF-8 with an optional UTF-8 BOM. |
 
 The synthetic corpus is under
 `apps/api/tests/fixtures/trade_republic_csv_v1/`. Its `expected-events.json`
