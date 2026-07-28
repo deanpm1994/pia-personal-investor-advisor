@@ -3,7 +3,7 @@
 from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from pia_api.core.auth import AuthenticatedUser, get_authenticated_user
 from pia_api.services.staged_imports import (
@@ -32,6 +32,7 @@ class ImportReviewResponse(BaseModel):
     event_count: int
     diagnostic_count: int
     confirmation_eligible: bool
+    diagnostics: list[DiagnosticResponse] = Field(default_factory=list)
     rows: list[RowReviewResponse]
 
 

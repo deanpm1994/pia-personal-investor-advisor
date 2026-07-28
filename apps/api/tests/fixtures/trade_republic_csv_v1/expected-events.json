@@ -46,6 +46,11 @@
     {"fixture": "malformed/missing-security-identifier.csv", "diagnostic_code": "TRCSV010_MISSING_SECURITY_IDENTIFIER"},
     {"fixture": "malformed/missing-shares.csv", "diagnostic_code": "TRCSV011_MISSING_SHARES"},
     {"fixture": "malformed/invalid-fee-tax-sign.csv", "diagnostic_code": "TRCSV012_FEE_OR_TAX_SIGN"},
-    {"fixture": "malformed/unsupported-observed-types.csv", "diagnostic_code": "TRCSV013_UNSUPPORTED_SOURCE_TYPE"}
+    {"fixture": "malformed/unsupported-observed-types.csv", "diagnostic_code": "TRCSV013_UNSUPPORTED_SOURCE_TYPE"},
+    {"fixture": "malformed/unterminated-quoted-field.csv", "diagnostic_code": "TRCSV015_ROW_SHAPE"},
+    {"fixture": "malformed/quote-in-unquoted-field.csv", "diagnostic_code": "TRCSV015_ROW_SHAPE"}
+  ],
+  "file_malformed": [
+    {"fixture": "malformed/invalid-utf8.hex", "encoding": "hex", "diagnostic_code": "TRCSV018_INVALID_ENCODING"}
   ]
 }

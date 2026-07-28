@@ -9,6 +9,7 @@ import pytest
 from pia_api.providers.trade_republic_csv import (
     DIAGNOSTIC_DUPLICATE_SOURCE_IDENTITY,
     DIAGNOSTIC_INVALID_CURRENCY,
+    DIAGNOSTIC_INVALID_ENCODING,
     DIAGNOSTIC_INVALID_FX_EVIDENCE,
     DIAGNOSTIC_ROW_SHAPE,
     TradeRepublicCsvStagedEvent,
@@ -20,6 +21,10 @@ FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "trade_republic_csv_v1"
 
 def _fixture_text(relative_path: str) -> str:
     return (FIXTURE_ROOT / relative_path).read_text(encoding="utf-8-sig")
+
+
+def _fixture_bytes(relative_path: str) -> bytes:
+    return bytes.fromhex((FIXTURE_ROOT / relative_path).read_text())
 
 
 def test_parses_supported_observed_rows_into_decimal_backed_staged_candidates() -> None:
@@ -58,6 +63,17 @@ def test_parses_supported_observed_rows_into_decimal_backed_staged_candidates() 
     assert fx_dividend.legs[0].money.currency == "USD"
     assert fx_dividend.source_reported_eur.eur_amount.amount == Decimal("9.20")
     assert fx_dividend.source_reported_eur.source_rate == Decimal("0.9200")
+
+
+def test_accepts_a_utf8_bom_and_valid_rfc4180_quoted_fields() -> None:
+    source = _fixture_text("accepted-observed.csv").replace(
+        "Synthetic deposit", '"Synthetic, ""quoted"" deposit"', 1
+    )
+
+    batch = parse_trade_republic_csv(b"\xef\xbb\xbf" + source.encode())
+
+    assert batch.confirmation_eligible is True
+    assert batch.diagnostics == ()
 
 
 @pytest.mark.parametrize(
@@ -113,6 +129,28 @@ def test_malformed_row_width_blocks_confirmation_with_its_own_diagnostic() -> No
 
     assert batch.confirmation_eligible is False
     assert batch.rows[0].diagnostics[0].code == DIAGNOSTIC_ROW_SHAPE
+
+
+def test_invalid_utf8_is_a_safe_file_diagnostic_without_candidates() -> None:
+    batch = parse_trade_republic_csv(_fixture_bytes("malformed/invalid-utf8.hex"))
+
+    assert batch.confirmation_eligible is False
+    assert batch.rows == ()
+    assert [diagnostic.code for diagnostic in batch.diagnostics] == [
+        DIAGNOSTIC_INVALID_ENCODING
+    ]
+    assert "UTF-8" in batch.diagnostics[0].message
+    assert "\\x" not in batch.diagnostics[0].message
+
+
+def test_bare_carriage_return_is_not_an_accepted_line_ending() -> None:
+    batch = parse_trade_republic_csv(
+        _fixture_text("accepted-observed.csv").replace("\n", "\r")
+    )
+
+    assert batch.confirmation_eligible is False
+    assert batch.rows == ()
+    assert batch.diagnostics[0].code == DIAGNOSTIC_ROW_SHAPE
 
 
 @pytest.mark.parametrize(
