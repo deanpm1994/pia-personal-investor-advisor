@@ -1,10 +1,12 @@
-"""Supabase REST adapter for owner-scoped staged imports."""
+"""Trusted server staging and owner-scoped review for imports."""
 
+import asyncio
 import hashlib
 from collections import defaultdict
 from uuid import uuid4
 
 import httpx
+import psycopg
 
 from pia_api.core.auth import AuthenticatedUser
 from pia_api.core.config import Settings
@@ -19,9 +21,175 @@ class StagedImportConfirmationError(RuntimeError):
     """Raised when a staged import cannot safely transition to confirmed."""
 
 
-class SupabaseStagedImportGateway:
+class TrustedStagedImportWriter:
+    """Persist parser output through the API's server-only database connection."""
+
     def __init__(self, settings: Settings) -> None:
+        self._database_url = settings.database_url.replace(
+            "postgresql+psycopg://", "postgresql://", 1
+        )
+
+    async def stage(
+        self,
+        *,
+        user_id: str,
+        import_id: str,
+        path: str,
+        filename: str,
+        content_type: str,
+        content: bytes,
+        batch: object,
+    ) -> None:
+        """Atomically persist one parser result inaccessible to browser roles."""
+        await asyncio.to_thread(
+            self._stage,
+            user_id,
+            import_id,
+            path,
+            filename,
+            content_type,
+            content,
+            batch,
+        )
+
+    def _stage(
+        self,
+        user_id: str,
+        import_id: str,
+        path: str,
+        filename: str,
+        content_type: str,
+        content: bytes,
+        batch: object,
+    ) -> None:
+        with psycopg.connect(self._database_url) as connection:
+            with connection.transaction():
+                connection.execute(
+                    """
+                    INSERT INTO public.staged_imports (
+                        id, user_id, source_provider, source_format, trusted_staged_at
+                    )
+                    VALUES (%s, %s, 'trade-republic', %s, timezone('utc', now()))
+                    """,
+                    (import_id, user_id, batch.format_version),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO public.staged_import_files (
+                        user_id, staged_import_id, bucket_id, object_path, filename,
+                        content_type, byte_size, sha256
+                    )
+                    VALUES (%s, %s, 'raw-imports', %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        user_id,
+                        import_id,
+                        path,
+                        filename,
+                        content_type,
+                        len(content),
+                        hashlib.sha256(content).hexdigest(),
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO public.staged_import_state_events (
+                        user_id, staged_import_id, position, state
+                    )
+                    VALUES (%s, %s, 1, 'staged')
+                    """,
+                    (user_id, import_id),
+                )
+                for row in batch.rows:
+                    parsed_output = (
+                        psycopg.types.json.Jsonb(
+                            {
+                                "candidates": [
+                                    candidate.model_dump(mode="json")
+                                    for candidate in row.candidates
+                                ]
+                            }
+                        )
+                        if row.candidates
+                        else None
+                    )
+                    row_id = connection.execute(
+                        """
+                        INSERT INTO public.staged_import_rows (
+                            user_id, staged_import_id, source_row_number, source_row,
+                            parsed_output
+                        )
+                        VALUES (%s, %s, %s, %s::jsonb, %s::jsonb)
+                        RETURNING id
+                        """,
+                        (
+                            user_id,
+                            import_id,
+                            row.row_number,
+                            psycopg.types.json.Jsonb(row.source_row),
+                            parsed_output,
+                        ),
+                    ).fetchone()[0]
+                    for diagnostic in row.diagnostics:
+                        self._insert_diagnostic(
+                            connection,
+                            user_id,
+                            import_id,
+                            row_id,
+                            diagnostic.code,
+                            diagnostic.message,
+                        )
+                for diagnostic in batch.diagnostics:
+                    self._insert_diagnostic(
+                        connection,
+                        user_id,
+                        import_id,
+                        None,
+                        diagnostic.code,
+                        diagnostic.message,
+                    )
+                for position, state in (
+                    (2, "parsed"),
+                    (3, "validated"),
+                    (4, "review_ready" if batch.confirmation_eligible else "blocked"),
+                ):
+                    connection.execute(
+                        """
+                        INSERT INTO public.staged_import_state_events (
+                            user_id, staged_import_id, position, state
+                        )
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (user_id, import_id, position, state),
+                    )
+
+    @staticmethod
+    def _insert_diagnostic(
+        connection: psycopg.Connection,
+        user_id: str,
+        import_id: str,
+        row_id: object | None,
+        code: str,
+        message: str,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO public.staged_import_validation_results (
+                user_id, staged_import_id, staged_import_row_id, code, severity,
+                message
+            )
+            VALUES (%s, %s, %s, %s, 'error', %s)
+            """,
+            (user_id, import_id, row_id, code, message),
+        )
+
+
+class SupabaseStagedImportGateway:
+    def __init__(
+        self, settings: Settings, writer: TrustedStagedImportWriter | None = None
+    ) -> None:
         self._settings = settings
+        self._writer = writer or TrustedStagedImportWriter(settings)
 
     def _headers(self, user: AuthenticatedUser) -> dict[str, str]:
         if not self._settings.supabase_anon_key or not user.access_token:
@@ -48,108 +216,15 @@ class SupabaseStagedImportGateway:
             )
             upload.raise_for_status()
             try:
-                await self._post(
-                    client,
-                    headers,
-                    "staged_imports",
-                    {
-                        "id": import_id,
-                        "user_id": user.id,
-                        "source_provider": "trade-republic",
-                        "source_format": batch.format_version,
-                    },
+                await self._writer.stage(
+                    user_id=user.id,
+                    import_id=import_id,
+                    path=path,
+                    filename=filename,
+                    content_type=content_type,
+                    content=content,
+                    batch=batch,
                 )
-                await self._post(
-                    client,
-                    headers,
-                    "staged_import_files",
-                    {
-                        "user_id": user.id,
-                        "staged_import_id": import_id,
-                        "bucket_id": "raw-imports",
-                        "object_path": path,
-                        "filename": filename,
-                        "content_type": content_type,
-                        "byte_size": len(content),
-                        "sha256": hashlib.sha256(content).hexdigest(),
-                    },
-                )
-                await self._post(
-                    client,
-                    headers,
-                    "staged_import_state_events",
-                    {
-                        "user_id": user.id,
-                        "staged_import_id": import_id,
-                        "position": 1,
-                        "state": "staged",
-                    },
-                )
-                row_ids: dict[int, str] = {}
-                for row in batch.rows:
-                    result = await self._post(
-                        client,
-                        headers,
-                        "staged_import_rows",
-                        {
-                            "user_id": user.id,
-                            "staged_import_id": import_id,
-                            "source_row_number": row.row_number,
-                            "source_row": row.source_row,
-                            "parsed_output": {
-                                "candidates": [
-                                    candidate.model_dump(mode="json")
-                                    for candidate in row.candidates
-                                ]
-                            }
-                            if row.candidates
-                            else None,
-                        },
-                    )
-                    row_ids[row.row_number] = result[0]["id"]
-                    for diagnostic in row.diagnostics:
-                        await self._post(
-                            client,
-                            headers,
-                            "staged_import_validation_results",
-                            {
-                                "user_id": user.id,
-                                "staged_import_id": import_id,
-                                "staged_import_row_id": row_ids[row.row_number],
-                                "code": diagnostic.code,
-                                "severity": "error",
-                                "message": diagnostic.message,
-                            },
-                        )
-                for diagnostic in batch.diagnostics:
-                    await self._post(
-                        client,
-                        headers,
-                        "staged_import_validation_results",
-                        {
-                            "user_id": user.id,
-                            "staged_import_id": import_id,
-                            "code": diagnostic.code,
-                            "severity": "error",
-                            "message": diagnostic.message,
-                        },
-                    )
-                for position, state in (
-                    (2, "parsed"),
-                    (3, "validated"),
-                    (4, "review_ready" if batch.confirmation_eligible else "blocked"),
-                ):
-                    await self._post(
-                        client,
-                        headers,
-                        "staged_import_state_events",
-                        {
-                            "user_id": user.id,
-                            "staged_import_id": import_id,
-                            "position": position,
-                            "state": state,
-                        },
-                    )
             except Exception:
                 await client.delete(
                     f"{self._settings.supabase_url}/storage/v1/object/raw-imports/{path}",
@@ -166,7 +241,7 @@ class SupabaseStagedImportGateway:
         async with httpx.AsyncClient(timeout=10.0) as client:
             imports = await client.get(
                 f"{base}/staged_imports",
-                params={"id": f"eq.{import_id}", "select": "id"},
+                params={"id": f"eq.{import_id}", "select": "id,trusted_staged_at"},
                 headers=headers,
             )
             imports.raise_for_status()
@@ -220,13 +295,14 @@ class SupabaseStagedImportGateway:
             for row in rows.json()
         ]
         status = states.json()[0]["state"] if states.json() else "staged"
+        trusted = imports.json()[0].get("trusted_staged_at") is not None
         return {
             "id": import_id,
             "status": status,
             "row_count": len(review_rows),
             "event_count": sum(len(row["events"]) for row in review_rows),
             "diagnostic_count": len(diagnostics.json()),
-            "confirmation_eligible": status == "review_ready",
+            "confirmation_eligible": trusted and status == "review_ready",
             "diagnostics": batch_diagnostics,
             "rows": review_rows,
         }
@@ -254,18 +330,3 @@ class SupabaseStagedImportGateway:
                     )
                 response.raise_for_status()
         return await self.review(user, import_id)
-
-    async def _post(
-        self,
-        client: httpx.AsyncClient,
-        headers: dict[str, str],
-        table: str,
-        payload: dict[str, object],
-    ) -> list[dict[str, object]]:
-        response = await client.post(
-            f"{self._settings.supabase_url.rstrip('/')}/rest/v1/{table}",
-            json=payload,
-            headers=headers,
-        )
-        response.raise_for_status()
-        return response.json()

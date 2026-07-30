@@ -237,6 +237,12 @@ def test_import_routes_report_unconfigured_staging_without_a_server_error():
 
 
 def test_gateway_stages_invalid_encoding_as_a_safe_blocked_review(monkeypatch) -> None:
+    class FakeTrustedWriter:
+        calls: list[dict[str, object]] = []
+
+        async def stage(self, **kwargs) -> None:
+            self.calls.append(kwargs)
+
     class Response:
         def __init__(self, payload):
             self._payload = payload
@@ -290,7 +296,10 @@ def test_gateway_stages_invalid_encoding_as_a_safe_blocked_review(monkeypatch) -
         "pia_api.services.staged_imports.httpx.AsyncClient", FakeAsyncClient
     )
     gateway = SupabaseStagedImportGateway(
-        Settings(supabase_url="https://supabase.example.test", supabase_anon_key="anon")
+        Settings(
+            supabase_url="https://supabase.example.test", supabase_anon_key="anon"
+        ),
+        writer=FakeTrustedWriter(),
     )
 
     review = asyncio.run(
@@ -319,15 +328,5 @@ def test_gateway_stages_invalid_encoding_as_a_safe_blocked_review(monkeypatch) -
         ],
         "rows": [],
     }
-    posted_validation = next(
-        payload
-        for method, url, payload in FakeAsyncClient.calls
-        if method == "POST" and url.endswith("/staged_import_validation_results")
-    )
-    assert "staged_import_row_id" not in posted_validation
+    assert FakeTrustedWriter.calls[0]["batch"].confirmation_eligible is False
     assert "source_row" not in str(review)
-    assert any(
-        payload["state"] == "blocked"
-        for method, url, payload in FakeAsyncClient.calls
-        if method == "POST" and url.endswith("/staged_import_state_events")
-    )
