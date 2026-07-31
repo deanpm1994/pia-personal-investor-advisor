@@ -20,11 +20,18 @@ venv/
 
 # Local data and imports
 data/
-imports/
+/imports/
 lessons/
 *.csv
 *.xlsx
 *.pdf
+
+# Committed synthetic import contracts; never place real exports here.
+!apps/api/tests/fixtures/
+!apps/api/tests/fixtures/trade_republic_csv_v1/
+!apps/api/tests/fixtures/trade_republic_csv_v1/*.csv
+!apps/api/tests/fixtures/trade_republic_csv_v1/malformed/
+!apps/api/tests/fixtures/trade_republic_csv_v1/malformed/*.csv
 
 # Editors and operating systems
 .DS_Store

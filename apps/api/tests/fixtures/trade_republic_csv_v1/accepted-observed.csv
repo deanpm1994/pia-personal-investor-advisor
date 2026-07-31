@@ -1,0 +1,11 @@
+datetime,date,account_type,category,type,asset_class,name,symbol,shares,price,amount,fee,tax,currency,original_amount,original_currency,fx_rate,description,transaction_id,counterparty_name,counterparty_iban,payment_reference,mcc_code
+2026-07-01T09:00:00Z,2026-07-01,DEFAULT,CASH,CUSTOMER_INBOUND,,,,,,1000.00,,,EUR,,,,Synthetic deposit,synthetic-tr-customer-in,,,,
+2026-07-01T09:01:00Z,2026-07-01,DEFAULT,CASH,TRANSFER_INBOUND,,,,,,250.00,,,EUR,,,,Synthetic deposit,synthetic-tr-transfer-in,,,,
+2026-07-01T09:02:00Z,2026-07-01,DEFAULT,CASH,TRANSFER_INSTANT_INBOUND,,,,,,25.00,,,EUR,,,,Synthetic deposit,synthetic-tr-instant-in,,,,
+2026-07-01T09:03:00Z,2026-07-01,DEFAULT,CASH,TRANSFER_OUTBOUND,,,,,,-20.00,,,EUR,,,,Synthetic withdrawal,synthetic-tr-transfer-out,,,,
+2026-07-01T09:04:00Z,2026-07-01,DEFAULT,CASH,TRANSFER_INSTANT_OUTBOUND,,,,,,-5.00,,,EUR,,,,Synthetic withdrawal,synthetic-tr-instant-out,,,,
+2026-07-01T10:00:00Z,2026-07-01,DEFAULT,SECURITY,BUY,STOCK,Synthetic Alpha,SYNTH-ALPHA,2.500,40.00,-100.00,-1.00,,EUR,,,,Synthetic buy,synthetic-tr-buy,,,,
+2026-07-01T10:05:00Z,2026-07-01,DEFAULT,SECURITY,SELL,STOCK,Synthetic Alpha,SYNTH-ALPHA,1.000,90.00,90.00,-1.00,,EUR,,,,Synthetic sell,synthetic-tr-sell,,,,
+2026-07-01T11:00:00Z,2026-07-01,DEFAULT,SECURITY,DIVIDEND,STOCK,Synthetic Alpha,SYNTH-ALPHA,,,4.00,,-1.00,EUR,,,,Synthetic dividend,synthetic-tr-dividend,,,,
+2026-07-01T11:30:00Z,2026-07-01,DEFAULT,CASH,INTEREST_PAYMENT,,,,,,0.05,,,EUR,,,,Synthetic interest,synthetic-tr-interest,,,,
+2026-07-01T12:00:00Z,2026-07-01,DEFAULT,SECURITY,DIVIDEND,STOCK,Synthetic Foreign,SYNTH-FX,,,9.20,,,EUR,10.00,USD,0.9200,Synthetic FX dividend,synthetic-tr-fx-dividend,,,,

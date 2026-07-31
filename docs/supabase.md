@@ -48,6 +48,16 @@ The browser uses these public values exclusively. Never add the service-role
 key, database password, signing key, or hosted credentials to a browser
 environment file.
 
+The local Auth issuer is explicitly `http://localhost:54321/auth/v1`, matching
+the API verifier's default `PIA_SUPABASE_URL`. Keep these origins aligned; a
+`localhost`/`127.0.0.1` mismatch makes otherwise valid browser sessions fail
+API JWT issuer validation.
+
+When starting the API with `pnpm dev:api`, the development script reads only the
+local stack's public anon key from `supabase status`. This gives the API the
+required Supabase gateway key while the browser's bearer token remains the
+identity used for RLS; it does not expose or load a service-role key.
+
 ## Migration authority
 
 Alembic is the sole migration authority for PIA application-owned `public`
@@ -84,6 +94,18 @@ they cannot update or delete ledger history. Database constraints preserve
 owner-consistent references, Decimal-backed numeric facts, source identity, and
 the event/leg shapes established in ADR 0005. No browser or API ledger-writing
 endpoint is introduced by this schema boundary.
+
+P4.2 adds five application-owned staged-import tables for the private Trade
+Republic CSV workflow: imports, exactly-one file metadata records, source and
+normalized rows, diagnostics, and immutable state events. The raw CSV itself
+continues to live only in the existing private `raw-imports` Storage bucket;
+Alembic stores its owner-prefixed path and metadata, never a public URL or raw
+content. As decided in ADR 0006, clients can select only their own staged data;
+the Python API persists parser output and validation evidence through its
+server-only database connection. The database enforces
+`staged → parsed → validated → review_ready → confirmed` or
+`staged → parsed → validated → blocked`; confirmation additionally requires
+server-written provenance, so a client cannot manufacture a review-ready batch.
 
 To run the local-Supabase isolation and migration rollback/upgrade tests after
 starting the stack and applying migrations, run from `apps/api`:

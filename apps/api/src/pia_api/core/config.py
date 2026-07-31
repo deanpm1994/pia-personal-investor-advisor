@@ -17,7 +17,9 @@ class Settings(BaseSettings):
         "postgresql+psycopg://postgres:postgres@localhost:54322/postgres"
     )
     supabase_url: str = "http://localhost:54321"
+    supabase_anon_key: str = ""
     supabase_jwt_audience: str = "authenticated"
+    web_origin: str = "http://localhost:3000"
 
     @property
     def supabase_jwks_url(self) -> str:

@@ -17,6 +17,7 @@ class AuthenticatedUser:
 
     id: str
     email: str | None
+    access_token: str | None = None
 
 
 class SupabaseJWTVerifier:
@@ -92,7 +93,8 @@ async def get_authenticated_user(
         )
     verifier = cast(SupabaseJWTVerifier, request.app.state.jwt_verifier)
     try:
-        return await verifier.verify(token)
+        user = await verifier.verify(token)
+        return AuthenticatedUser(id=user.id, email=user.email, access_token=token)
     except InvalidTokenError as error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

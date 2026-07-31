@@ -15,7 +15,7 @@
     "test:web": "pnpm --filter @pia/web test:run",
     "build:web": "pnpm --filter @pia/web build",
     "check:web": "pnpm --filter @pia/web check",
-    "dev:api": "uv run --directory apps/api uvicorn pia_api.main:app --reload",
+    "dev:api": "sh ./scripts/dev-api.sh",
     "lint:api": "uv run --directory apps/api ruff check .",
     "format:api": "uv run --directory apps/api ruff format --check .",
     "test:api": "uv run --directory apps/api pytest",
