@@ -1348,7 +1348,7 @@ def test_synthetic_financial_fixture_history_persists_without_reinterpretation(
                     (FIXTURE_HISTORY[-2].event_id, FIXTURE_HISTORY[-1].event_id),
                 ).fetchall() == [
                     (FIXTURE_HISTORY[0].event_id, None),
-                    (None, FIXTURE_HISTORY[0].event_id),
+                    (None, FIXTURE_HISTORY[-2].event_id),
                 ]
                 assert connection.execute(
                     """
