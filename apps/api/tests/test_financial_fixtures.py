@@ -102,7 +102,7 @@ def test_corrections_and_reversals_preserve_original_fixture_history() -> None:
     original_amount = DEPOSIT.event.legs[0].money.amount
 
     assert CORRECTION.event.correction_of_event_id == DEPOSIT.event_id
-    assert REVERSAL.event.reversal_of_event_id == DEPOSIT.event_id
+    assert REVERSAL.event.reversal_of_event_id == CORRECTION.event_id
     assert DEPOSIT.event.legs[0].money.amount == original_amount
     with pytest.raises(ValidationError):
         DEPOSIT.event.legs[0].money.amount = Decimal("1")

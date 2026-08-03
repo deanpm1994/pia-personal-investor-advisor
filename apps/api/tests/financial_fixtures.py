@@ -189,7 +189,7 @@ REVERSAL = _fixture_event(
     "reversal-1",
     FinancialEventType.REVERSAL,
     [_cash(MovementDirection.OUT, "0.0100")],
-    reversal_of_event_id=DEPOSIT.event_id,
+    reversal_of_event_id=CORRECTION.event_id,
 )
 
 FIXTURE_HISTORY = (
