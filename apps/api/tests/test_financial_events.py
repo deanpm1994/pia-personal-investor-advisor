@@ -207,6 +207,15 @@ def test_event_and_nested_contracts_are_immutable() -> None:
         event.legs[0].money.amount = Decimal("200.00")
 
 
+def test_event_accepts_an_opaque_nonblank_source_group_reference() -> None:
+    event = _event(source_group_reference="source-transaction-42")
+
+    assert event.source_group_reference == "source-transaction-42"
+
+    with pytest.raises(ValidationError, match="must not be blank"):
+        _event(source_group_reference="   ")
+
+
 def test_batch_rejects_duplicate_source_identity_for_owner_and_account() -> None:
     owner_id, account_id = uuid4(), uuid4()
     first = _event(owner_id=owner_id, account_id=account_id)

@@ -52,6 +52,20 @@ def test_parses_supported_observed_rows_into_decimal_backed_staged_candidates() 
     assert isinstance(buy, TradeRepublicCsvStagedEvent)
     assert buy.legs[0].money.amount == Decimal("100.00")
     assert buy.legs[1].quantity.value == Decimal("2.500")
+    assert buy.source_group_reference == "synthetic-tr-buy"
+
+    groups_by_reference = {
+        candidate.source_identity.event_reference: candidate.source_group_reference
+        for row in batch.rows
+        for candidate in row.candidates
+    }
+    assert groups_by_reference["synthetic-tr-buy:base"] == "synthetic-tr-buy"
+    assert groups_by_reference["synthetic-tr-buy:fee"] == "synthetic-tr-buy"
+    assert groups_by_reference["synthetic-tr-dividend:base"] == "synthetic-tr-dividend"
+    assert (
+        groups_by_reference["synthetic-tr-dividend:withholding-tax"]
+        == "synthetic-tr-dividend"
+    )
 
     fx_dividend = next(
         candidate

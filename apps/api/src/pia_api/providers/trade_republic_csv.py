@@ -18,6 +18,7 @@ from pia_api.domain.financial_events import (
     Money,
     MovementDirection,
     Quantity,
+    SourceGroupReference,
     SourceIdentity,
     SourceReportedEurEvidence,
 )
@@ -113,6 +114,7 @@ class TradeRepublicCsvStagedEvent(FinancialContract):
     occurred_at: datetime
     legs: tuple[EventLeg, ...] = Field(min_length=1)
     source_reported_eur: SourceReportedEurEvidence | None = None
+    source_group_reference: SourceGroupReference
 
 
 class TradeRepublicCsvStagedRow(FinancialContract):
@@ -585,6 +587,7 @@ def _build_candidates(
             )
         )
     source_reported_eur = None
+    source_group_reference = row["transaction_id"]
     if fx_present:
         eur_amount = decimals["amount"]
         fx_rate = decimals["fx_rate"]
@@ -604,6 +607,7 @@ def _build_candidates(
             occurred_at=occurred_at,
             legs=tuple(legs),
             source_reported_eur=source_reported_eur,
+            source_group_reference=source_group_reference,
         )
     ]
     for column, component, component_event_type in (
@@ -626,6 +630,7 @@ def _build_candidates(
                             money=Money(amount=abs(value), currency=row["currency"]),
                         ),
                     ),
+                    source_group_reference=source_group_reference,
                 )
             )
     return tuple(candidates)
