@@ -110,6 +110,9 @@ class SourceIdentity(FinancialContract):
         return value
 
 
+SourceGroupReference = Annotated[str, StringConstraints(strict=True, min_length=1)]
+
+
 class MovementDirection(StrEnum):
     """Direction of a factual cash or instrument movement."""
 
@@ -172,8 +175,17 @@ class FinancialEvent(FinancialContract):
     occurred_at: datetime
     legs: tuple[EventLeg, ...] = Field(min_length=1)
     source_reported_eur: SourceReportedEurEvidence | None = None
+    source_group_reference: SourceGroupReference | None = None
     correction_of_event_id: UUID | None = None
     reversal_of_event_id: UUID | None = None
+
+    @field_validator("source_group_reference")
+    @classmethod
+    def reject_blank_source_group_reference(cls, value: str | None) -> str | None:
+        """Preserve an explicit source group without accepting blank evidence."""
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
 
     @model_validator(mode="after")
     def validate_event_shape(self) -> "FinancialEvent":
