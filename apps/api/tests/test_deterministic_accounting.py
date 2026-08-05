@@ -2,10 +2,8 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime
-from decimal import Decimal
 
 import pytest
-
 from accounting_fixtures import (
     ACCOUNT_FIXTURES,
     ACCOUNTING_FIXTURE_HISTORY,
@@ -17,8 +15,10 @@ from accounting_fixtures import (
     INVALID_OVERSELL,
     POSITION_EXPECTATIONS,
 )
+
 from pia_api.domain.accounting import (
     AccountingAccount,
+    CashBalance,
     LedgerEvent,
     replay_accounting,
     serialize_accounting_result,
@@ -27,19 +27,18 @@ from pia_api.domain.financial_events import (
     CashLeg,
     FinancialEvent,
     FinancialEventType,
-    InstrumentLeg,
     Money,
     MovementDirection,
-    Quantity,
     SourceIdentity,
 )
 
 
 def _accounts() -> tuple[AccountingAccount, ...]:
     return tuple(
-        AccountingAccount(account_id=fixture.account_id, owner_id=next(
-            event.event.owner_id for event in ACCOUNTING_FIXTURE_HISTORY
-        ))
+        AccountingAccount(
+            account_id=fixture.account_id,
+            owner_id=next(event.event.owner_id for event in ACCOUNTING_FIXTURE_HISTORY),
+        )
         for fixture in ACCOUNT_FIXTURES
     )
 
@@ -84,7 +83,8 @@ def test_fold_reconciles_exact_cash_positions_and_evidence() -> None:
         (position.instrument_id, position.quantity)
         for position in result.owner_positions
     ) == tuple(
-        (expected.instrument_id, expected.quantity) for expected in POSITION_EXPECTATIONS
+        (expected.instrument_id, expected.quantity)
+        for expected in POSITION_EXPECTATIONS
     )
     assert result.diagnostics == ()
     assert all(balance.evidence_event_ids for balance in result.account_cash_balances)
@@ -98,6 +98,17 @@ def test_replay_order_makes_serialized_results_byte_equivalent() -> None:
     )
 
     assert serialize_accounting_result(ordered) == serialize_accounting_result(shuffled)
+
+
+def test_replay_is_invariant_to_each_fixture_history_rotation() -> None:
+    baseline = serialize_accounting_result(_result_for_fixture_history())
+
+    for offset in range(len(ACCOUNTING_FIXTURE_HISTORY)):
+        rotated = (
+            ACCOUNTING_FIXTURE_HISTORY[offset:] + ACCOUNTING_FIXTURE_HISTORY[:offset]
+        )
+        result = replay_accounting(_accounts(), _ledger_events(*rotated))
+        assert serialize_accounting_result(result) == baseline
 
 
 def test_impossible_histories_are_diagnostic_and_do_not_publish_aggregates() -> None:
@@ -117,7 +128,7 @@ def test_impossible_histories_are_diagnostic_and_do_not_publish_aggregates() -> 
         for diagnostic in result.diagnostics
     } == expected
     assert not any(
-        position.account_id == str(BROKERAGE_ACCOUNT_ID)
+        position.account_id == BROKERAGE_ACCOUNT_ID
         for position in result.account_positions
     )
     assert result.owner_positions == ()
@@ -132,7 +143,11 @@ def test_unattributed_fee_is_visible_without_discarding_its_cash_fact() -> None:
     unattributed_fee = replace(fee, source_group_reference=None)
 
     result = replay_accounting(
-        _accounts(), _ledger_events(*ACCOUNTING_FIXTURE_HISTORY, unattributed_fee)
+        _accounts(),
+        _ledger_events(
+            *(fixture for fixture in ACCOUNTING_FIXTURE_HISTORY if fixture != fee),
+            unattributed_fee,
+        ),
     )
 
     assert result.diagnostics[-1].code == "ACCOUNTING_MISSING_ATTRIBUTION"
@@ -163,13 +178,23 @@ def test_contract_rejects_float_timestamps_and_money_inputs() -> None:
     with pytest.raises(ValueError, match="floats are not accepted"):
         Money(amount=1.0, currency="EUR")
 
+    with pytest.raises(ValueError, match="floats are not accepted"):
+        CashBalance(None, "EUR", 1.0, ())
+
 
 def test_reversal_with_different_owner_or_account_is_incomplete() -> None:
     target = _ledger_events(*ACCOUNTING_FIXTURE_HISTORY)[0]
+    other_account_id = next(
+        account.account_id
+        for account in _accounts()
+        if account.account_id != target.event.account_id
+    )
     mismatched_event = FinancialEvent(
         owner_id=target.event.owner_id,
-        account_id=next(account.account_id for account in _accounts() if account.account_id != target.event.account_id),
-        source_identity=SourceIdentity(provider="test", event_reference="wrong-scope-reversal"),
+        account_id=other_account_id,
+        source_identity=SourceIdentity(
+            provider="test", event_reference="wrong-scope-reversal"
+        ),
         event_type=FinancialEventType.REVERSAL,
         occurred_at=datetime(2026, 8, 1, tzinfo=UTC),
         reversal_of_event_id=target.event_id,
@@ -194,3 +219,12 @@ def test_reversal_with_different_owner_or_account_is_incomplete() -> None:
     )
 
     assert result.diagnostics[-1].code == "ACCOUNTING_INVALID_REVERSAL_LINK"
+
+
+def test_duplicate_immutable_event_ids_are_incomplete() -> None:
+    ledger_events = _ledger_events(*ACCOUNTING_FIXTURE_HISTORY)
+
+    result = replay_accounting(_accounts(), ledger_events + (ledger_events[0],))
+
+    assert result.diagnostics[0].code == "ACCOUNTING_DUPLICATE_EVENT_ID"
+    assert result.owner_cash_balances == ()
