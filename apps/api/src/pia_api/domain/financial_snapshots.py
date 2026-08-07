@@ -70,7 +70,10 @@ class SnapshotMaterial:
 
 
 def build_snapshot_material(
-    accounts: Iterable[SnapshotAccount], ledger_events: Iterable[LedgerEvent]
+    accounts: Iterable[SnapshotAccount],
+    ledger_events: Iterable[LedgerEvent],
+    *,
+    owner_id: UUID | None = None,
 ) -> SnapshotMaterial:
     """Build one immutable snapshot payload from immutable facts.
 
@@ -91,7 +94,7 @@ def build_snapshot_material(
             ),
         )
     )
-    _validate_owner_scope(ordered_accounts, ordered_events)
+    _validate_owner_scope(ordered_accounts, ordered_events, owner_id)
     accounting_accounts = tuple(
         AccountingAccount(account_id=account.account_id, owner_id=account.owner_id)
         for account in ordered_accounts
@@ -106,6 +109,9 @@ def build_snapshot_material(
     watermark = _input_watermark(ordered_accounts, ordered_events)
     diagnostics, reserve_progress = _diagnostics_and_reserve_progress(
         ordered_accounts, accounting, fifo
+    )
+    snapshot_owner_id = owner_id or (
+        ordered_accounts[0].owner_id if ordered_accounts else None
     )
     content = {
         "account_summaries": [_account_data(account) for account in ordered_accounts],
@@ -143,7 +149,7 @@ def build_snapshot_material(
         ],
         "inclusion_boundary": {"kind": "all-owner-ledger-facts"},
         "ledger_events": [_fingerprint_event_data(entry) for entry in ordered_events],
-        "owner_id": str(ordered_accounts[0].owner_id) if ordered_accounts else None,
+        "owner_id": str(snapshot_owner_id) if snapshot_owner_id else None,
         "policy_version": SNAPSHOT_ACCOUNTING_POLICY_VERSION,
         "serialization_version": SNAPSHOT_SERIALIZATION_VERSION,
     }
@@ -159,12 +165,16 @@ def build_snapshot_material(
 
 
 def _validate_owner_scope(
-    accounts: tuple[SnapshotAccount, ...], events: tuple[LedgerEvent, ...]
+    accounts: tuple[SnapshotAccount, ...],
+    events: tuple[LedgerEvent, ...],
+    owner_id: UUID | None,
 ) -> None:
     owner_ids = {account.owner_id for account in accounts}
     owner_ids.update(entry.event.owner_id for entry in events)
     if len(owner_ids) > 1:
         raise ValueError("a snapshot may contain one owner only")
+    if owner_id is not None and owner_ids and owner_ids != {owner_id}:
+        raise ValueError("snapshot inputs do not belong to the requested owner")
     account_ids = {account.account_id for account in accounts}
     if any(entry.event.account_id not in account_ids for entry in events):
         raise ValueError("snapshot ledger event references an unknown account")
