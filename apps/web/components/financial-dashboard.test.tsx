@@ -55,7 +55,11 @@ describe("FinancialDashboard", () => {
     render(<FinancialDashboard />);
 
     expect(await screen.findByText("540.00 EUR")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Emergency reserve target progress" })).toHaveAttribute("aria-valuetext", "1500.00 EUR available of 2000.00 EUR target");
+    const progress = screen.getByRole("progressbar", { name: "Emergency reserve target progress" });
+    expect(progress).toHaveAttribute("aria-valuemin", "0");
+    expect(progress).toHaveAttribute("aria-valuemax", "2000.00");
+    expect(progress).toHaveAttribute("aria-valuenow", "1500.00");
+    expect(progress).toHaveAttribute("aria-valuetext", "1500.00 EUR available of 2000.00 EUR target");
     expect(screen.getByText("Ledger as of")).toBeInTheDocument();
     expect(screen.getByText("3 recorded events")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/v1/financial-picture", { headers: { Authorization: "Bearer owner-token" } });
@@ -89,6 +93,26 @@ describe("FinancialDashboard", () => {
 
     await waitFor(() => expect(screen.getByText("Financial picture refreshed from your recorded ledger facts.")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenLastCalledWith("http://localhost:8000/v1/financial-picture/refresh", { method: "POST", headers: { Authorization: "Bearer owner-token" } });
+  });
+
+  it("keeps the explicitly refreshed snapshot when the initial read finishes later", async () => {
+    getClient.mockReturnValue(signedInClient() as never);
+    let resolveInitialRead: (response: Response) => void;
+    const initialRead = new Promise<Response>((resolve) => {
+      resolveInitialRead = resolve;
+    });
+    fetchMock
+      .mockReturnValueOnce(initialRead)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...picture, cash_by_currency: { ...picture.cash_by_currency, accounts: [{ ...picture.cash_by_currency.accounts[0], amount: "600.00" }] } })));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<FinancialDashboard />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh financial picture" }));
+    expect(await screen.findByText("600.00 EUR")).toBeInTheDocument();
+
+    resolveInitialRead!(new Response(JSON.stringify(picture)));
+    await waitFor(() => expect(screen.queryByText("540.00 EUR")).not.toBeInTheDocument());
   });
 
   it("announces no-ledger and non-EUR states without converting recorded values", async () => {
@@ -148,5 +172,24 @@ describe("FinancialDashboard", () => {
     expect(await screen.findByText("No EUR emergency-reserve target is configured.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh financial picture" }));
     expect(await screen.findByText("Refresh failed. Your existing snapshot was not changed; retry explicitly when the PIA API is available.")).toBeInTheDocument();
+  });
+
+  it("shows a failure state when session lookup fails during loading or refresh", async () => {
+    const getSession = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { session: { access_token: "owner-token" } } })
+      .mockRejectedValueOnce(new Error("Session unavailable"));
+    getClient.mockReturnValue({ auth: { getSession } } as never);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(picture)));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<FinancialDashboard />);
+
+    expect(await screen.findByText("540.00 EUR")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh financial picture" }));
+    expect(await screen.findByText("Refresh failed. Your existing snapshot was not changed; retry explicitly when the PIA API is available.")).toBeInTheDocument();
+
+    getClient.mockReturnValue({ auth: { getSession: vi.fn().mockRejectedValue(new Error("Session unavailable")) } } as never);
+    render(<FinancialDashboard />);
+    expect(await screen.findByText("Financial picture unavailable")).toBeInTheDocument();
   });
 });
