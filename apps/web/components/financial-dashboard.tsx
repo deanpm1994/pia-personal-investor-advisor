@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
@@ -84,46 +84,56 @@ function accountRoleLabel(role: AccountSummary["role"]) {
   return role.replaceAll("_", " ");
 }
 
+function ariaRangeValue(decimal: string) {
+  // ARIA numeric tokens accept Decimal strings; retain the API's exact value rather than converting money to a float.
+  return decimal as unknown as number;
+}
+
 export function FinancialDashboard() {
   const [view, setView] = useState<DashboardView>("overview");
   const [state, setState] = useState<DashboardState>("checking");
   const [picture, setPicture] = useState<FinancialPicture>();
   const [message, setMessage] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const pictureRequest = useRef(0);
 
   async function accessToken() {
     const session = await getSupabaseBrowserClient()?.auth.getSession();
     return session?.data.session?.access_token;
   }
 
-  async function readPicture(token: string) {
+  async function readPicture(token: string, requestId: number) {
     const response = await fetch(`${apiUrl}/v1/financial-picture`, {
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (requestId !== pictureRequest.current) return;
     if (response.status === 404) {
       setPicture(undefined);
       setState("empty");
       return;
     }
     if (!response.ok) throw new Error("Financial picture read failed");
-    setPicture((await response.json()) as FinancialPicture);
+    const nextPicture = (await response.json()) as FinancialPicture;
+    if (requestId !== pictureRequest.current) return;
+    setPicture(nextPicture);
     setState("ready");
   }
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const token = await accessToken();
-      if (!active) return;
-      if (!token) {
-        setState("unauthenticated");
-        return;
-      }
-      setState("loading");
+      const requestId = ++pictureRequest.current;
       try {
-        await readPicture(token);
+        const token = await accessToken();
+        if (!active || requestId !== pictureRequest.current) return;
+        if (!token) {
+          setState("unauthenticated");
+          return;
+        }
+        setState("loading");
+        await readPicture(token, requestId);
       } catch {
-        if (active) {
+        if (active && requestId === pictureRequest.current) {
           setState("error");
           setMessage("We could not load your latest financial picture. Try again when the PIA API is available.");
         }
@@ -136,28 +146,33 @@ export function FinancialDashboard() {
   }, []);
 
   async function refresh() {
+    const requestId = ++pictureRequest.current;
     setIsRefreshing(true);
     setMessage("");
-    const token = await accessToken();
-    if (!token) {
-      setState("unauthenticated");
-      setIsRefreshing(false);
-      return;
-    }
     try {
+      const token = await accessToken();
+      if (requestId !== pictureRequest.current) return;
+      if (!token) {
+        setState("unauthenticated");
+        return;
+      }
       const response = await fetch(`${apiUrl}/v1/financial-picture/refresh`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error("Financial picture refresh failed");
-      setPicture((await response.json()) as FinancialPicture);
+      const nextPicture = (await response.json()) as FinancialPicture;
+      if (requestId !== pictureRequest.current) return;
+      setPicture(nextPicture);
       setState("ready");
       setMessage("Financial picture refreshed from your recorded ledger facts.");
     } catch {
-      setState(picture ? "ready" : "error");
-      setMessage("Refresh failed. Your existing snapshot was not changed; retry explicitly when the PIA API is available.");
+      if (requestId === pictureRequest.current) {
+        setState(picture ? "ready" : "error");
+        setMessage("Refresh failed. Your existing snapshot was not changed; retry explicitly when the PIA API is available.");
+      }
     } finally {
-      setIsRefreshing(false);
+      if (requestId === pictureRequest.current) setIsRefreshing(false);
     }
   }
 
@@ -283,12 +298,14 @@ function ReserveProgress({ reserve }: { reserve: FinancialPicture["reserve_progr
   if (reserve.status === "unavailable") {
     return <section className="rounded-panel border border-border bg-surface p-5" aria-labelledby="reserve-heading"><h2 className="text-lg font-semibold text-ink" id="reserve-heading">Emergency reserve</h2><p className="mt-3 text-sm leading-6 text-ink-muted">No EUR emergency-reserve target is configured.</p></section>;
   }
+  const available = reserve.available_eur_balance ?? "0";
+  const target = reserve.configured_target_eur ?? "0";
   return (
     <section className="rounded-panel border border-border bg-surface p-5" aria-labelledby="reserve-heading">
       <h2 className="text-lg font-semibold text-ink" id="reserve-heading">Emergency reserve</h2>
-      <div aria-label="Emergency reserve target progress" aria-valuetext={`${displayAmount(reserve.available_eur_balance ?? "0", "EUR")} available of ${displayAmount(reserve.configured_target_eur ?? "0", "EUR")} target`} className="mt-4" role="progressbar">
-        <p className="text-sm font-semibold text-ink">{displayAmount(reserve.available_eur_balance ?? "0", "EUR")}</p>
-        <p className="mt-1 text-sm text-ink-muted">of {displayAmount(reserve.configured_target_eur ?? "0", "EUR")} target</p>
+      <div aria-label="Emergency reserve target progress" aria-valuemax={ariaRangeValue(target)} aria-valuemin={0} aria-valuenow={ariaRangeValue(available)} aria-valuetext={`${displayAmount(available, "EUR")} available of ${displayAmount(target, "EUR")} target`} className="mt-4" role="progressbar">
+        <p className="text-sm font-semibold text-ink">{displayAmount(available, "EUR")}</p>
+        <p className="mt-1 text-sm text-ink-muted">of {displayAmount(target, "EUR")} target</p>
       </div>
       {reserve.status === "incomplete" && <p className="mt-3 text-sm text-amber-800">Progress is incomplete because some reserve evidence cannot be represented in EUR.</p>}
     </section>
