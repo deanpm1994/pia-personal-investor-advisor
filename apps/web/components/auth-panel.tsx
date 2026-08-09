@@ -54,12 +54,12 @@ export function AuthPanel() {
     return <span className="text-xs text-ink-muted">Local auth setup required</span>;
   }
   return (
-    <form aria-label="Magic link sign in" className="flex items-center gap-2" onSubmit={sendMagicLink}>
+    <form aria-label="Magic link sign in" className="flex w-full min-w-0 items-center justify-end gap-2 sm:w-auto" onSubmit={sendMagicLink}>
       <label className="sr-only" htmlFor="email">
         Email
       </label>
       <input
-        className="w-44 rounded border border-border px-2 py-1 text-sm"
+        className="min-w-0 flex-1 rounded border border-border px-2 py-1 text-sm sm:w-44 sm:flex-none"
         id="email"
         onChange={(event) => setEmail(event.target.value)}
         required
@@ -67,7 +67,7 @@ export function AuthPanel() {
         value={email}
       />
       <button
-        className="rounded bg-brand px-3 py-1 text-sm font-medium text-white"
+        className="shrink-0 rounded bg-brand px-3 py-1 text-sm font-medium text-white"
         disabled={state === "checking"}
         type="submit"
       >
