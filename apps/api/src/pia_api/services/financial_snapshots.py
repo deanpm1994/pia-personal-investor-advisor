@@ -33,6 +33,10 @@ class SnapshotRefreshError(RuntimeError):
     """Raised when a complete, auditable snapshot cannot be persisted."""
 
 
+class SnapshotReadError(RuntimeError):
+    """Raised when the latest persisted snapshot cannot be read safely."""
+
+
 @dataclass(frozen=True)
 class SnapshotRefreshResult:
     """Internal refresh outcome; HTTP response design belongs to P5.8."""
@@ -40,6 +44,19 @@ class SnapshotRefreshResult:
     snapshot_id: str
     fingerprint: str
     reused: bool
+
+
+@dataclass(frozen=True)
+class SnapshotReadResult:
+    """Owner-scoped persisted snapshot plus deterministic freshness state."""
+
+    snapshot_id: str
+    input_fingerprint: str
+    as_of: str | None
+    refreshed_at: str
+    input_counts: dict[str, int]
+    content: dict[str, object]
+    is_fresh: bool
 
 
 class TrustedSnapshotGateway:
@@ -53,6 +70,10 @@ class TrustedSnapshotGateway:
     async def refresh(self, user: AuthenticatedUser) -> SnapshotRefreshResult:
         """Perform an authenticated, explicit refresh with no partial completion."""
         return await asyncio.to_thread(self._refresh, user.id)
+
+    async def get_latest(self, user: AuthenticatedUser) -> SnapshotReadResult | None:
+        """Read one owner's newest snapshot and compare its canonical inputs."""
+        return await asyncio.to_thread(self._get_latest, user.id)
 
     def _refresh(self, user_id: str) -> SnapshotRefreshResult:
         try:
@@ -119,6 +140,52 @@ class TrustedSnapshotGateway:
             raise
         except (psycopg.Error, TypeError, ValueError) as error:
             raise SnapshotRefreshError("snapshot refresh failed atomically") from error
+
+    def _get_latest(self, user_id: str) -> SnapshotReadResult | None:
+        try:
+            owner_id = UUID(user_id)
+        except (TypeError, ValueError) as error:
+            raise SnapshotReadError("authenticated user id must be a UUID") from error
+        try:
+            with psycopg.connect(
+                self._database_url, row_factory=dict_row
+            ) as connection:
+                with connection.transaction():
+                    connection.execute(
+                        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                    )
+                    snapshot = connection.execute(
+                        """
+                        SELECT id::text, input_fingerprint, as_of, refreshed_at,
+                               input_counts, content
+                        FROM public.financial_snapshots
+                        WHERE user_id = %s
+                        ORDER BY refreshed_at DESC, id DESC
+                        LIMIT 1
+                        """,
+                        (owner_id,),
+                    ).fetchone()
+                    if snapshot is None:
+                        return None
+                    accounts, ledger_events = self._read_inputs(connection, owner_id)
+                    material = build_snapshot_material(
+                        accounts, ledger_events, owner_id=owner_id
+                    )
+                    return SnapshotReadResult(
+                        snapshot_id=snapshot["id"],
+                        input_fingerprint=snapshot["input_fingerprint"],
+                        as_of=self._timestamp(snapshot["as_of"]),
+                        refreshed_at=self._timestamp(snapshot["refreshed_at"]),
+                        input_counts=snapshot["input_counts"],
+                        content=snapshot["content"],
+                        is_fresh=(
+                            snapshot["input_fingerprint"] == material.fingerprint
+                        ),
+                    )
+        except SnapshotReadError:
+            raise
+        except (psycopg.Error, TypeError, ValueError) as error:
+            raise SnapshotReadError("latest snapshot is unavailable") from error
 
     @staticmethod
     def _read_inputs(
@@ -235,3 +302,11 @@ class TrustedSnapshotGateway:
             """,
             (owner_id, Jsonb({"snapshot_id": snapshot_id})),
         )
+
+    @staticmethod
+    def _timestamp(value: object) -> str | None:
+        if value is None:
+            return None
+        if not hasattr(value, "isoformat"):
+            raise ValueError("snapshot timestamp is invalid")
+        return value.isoformat().replace("+00:00", "Z")

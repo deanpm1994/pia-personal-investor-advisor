@@ -115,6 +115,15 @@ def test_snapshot_refresh_is_idempotent_immutable_and_owner_scoped(
         assert first.snapshot_id == second.snapshot_id
         assert first.reused is False
         assert second.reused is True
+        latest = asyncio.run(gateway.get_latest(owner))
+        assert latest is not None
+        assert latest.snapshot_id == first.snapshot_id
+        assert latest.is_fresh is True
+        assert latest.content["cash_by_currency"]["owner"] == {"EUR": "100.0000"}
+        assert (
+            asyncio.run(gateway.get_latest(AuthenticatedUser(str(other_id), None)))
+            is None
+        )
 
         with psycopg.connect(database_url) as connection:
             with connection.transaction():
@@ -191,6 +200,11 @@ def test_snapshot_refresh_is_idempotent_immutable_and_owner_scoped(
                     """,
                     (changed_event, owner_id, account_id),
                 )
+
+        stale = asyncio.run(gateway.get_latest(owner))
+        assert stale is not None
+        assert stale.snapshot_id == first.snapshot_id
+        assert stale.is_fresh is False
 
         with psycopg.connect(database_url, autocommit=True) as connection:
             connection.execute(
