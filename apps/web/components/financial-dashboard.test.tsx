@@ -28,6 +28,37 @@ const picture = {
   evidence_event_ids: ["event-1", "event-2", "event-3"],
 };
 
+const reconciledPhaseFivePicture = {
+  ...picture,
+  state: "incomplete",
+  completeness: { status: "incomplete", diagnostic_count: 1 },
+  account_summaries: [
+    { account_id: "brokerage", name: "Synthetic brokerage", role: "brokerage", archived_at: null, emergency_reserve_target_eur: null },
+    { account_id: "cash", name: "Synthetic cash", role: "cash", archived_at: null, emergency_reserve_target_eur: null },
+    { account_id: "savings", name: "Synthetic savings", role: "savings", archived_at: null, emergency_reserve_target_eur: null },
+    { account_id: "reserve-eur", name: "Synthetic emergency reserve", role: "emergency_reserve", archived_at: null, emergency_reserve_target_eur: "500.0000" },
+    { account_id: "reserve-usd", name: "Synthetic USD reserve", role: "emergency_reserve", archived_at: null, emergency_reserve_target_eur: "250.0000" },
+  ],
+  cash_by_currency: {
+    accounts: [
+      { account_id: "brokerage", amount: "995.2150", currency: "EUR", evidence_event_ids: ["event-brokerage"] },
+      { account_id: "cash", amount: "75.0000", currency: "EUR", evidence_event_ids: ["event-cash"] },
+      { account_id: "savings", amount: "540.0000", currency: "EUR", evidence_event_ids: ["event-savings"] },
+      { account_id: "reserve-eur", amount: "350.0000", currency: "EUR", evidence_event_ids: ["event-reserve-eur"] },
+      { account_id: "reserve-usd", amount: "80.0000", currency: "USD", evidence_event_ids: ["event-reserve-usd"] },
+    ],
+    owner: { EUR: "2160.2150", USD: "70.0000" },
+  },
+  positions: { accounts: [], owner: [{ instrument_id: "US0378331005", quantity: "3.500", evidence_event_ids: ["event-buy-2"] }] },
+  fifo: {
+    open_lots: [{ account_id: "brokerage", buy_event_id: "event-buy-2", evidence_event_ids: ["event-buy-2"], fee_event_ids: ["event-buy-2-fee"], instrument_id: "US0378331005", quantity: "3.500", source_currency: "EUR", total_basis: "35.350" }],
+    realized_sales: [{ account_id: "brokerage", sale_event_id: "event-sale-1", evidence_event_ids: ["event-sale-1"], instrument_id: "US0378331005", source_currency: "EUR", realized_gain: "32.860" }],
+  },
+  reserve_progress: { status: "incomplete", available_eur_balance: "350.0000", configured_target_eur: "750.0000" },
+  diagnostics: [{ account_id: "reserve-usd", code: "SNAPSHOT_RESERVE_NON_EUR_BALANCE", evidence_event_ids: ["event-reserve-usd"] }],
+  evidence_event_ids: ["event-brokerage", "event-cash", "event-savings", "event-reserve-eur", "event-reserve-usd"],
+};
+
 function signedInClient() {
   return { auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: "owner-token" } } }) } };
 }
@@ -78,6 +109,26 @@ describe("FinancialDashboard", () => {
     expect(screen.getByText("2.5000 units")).toBeInTheDocument();
     expect(screen.getByText("300.00 EUR")).toBeInTheDocument();
     expect(screen.getByText("20.00 EUR")).toBeInTheDocument();
+  });
+
+  it("renders the hand-worked Phase 5 reconciliation without estimating unavailable EUR evidence", async () => {
+    getClient.mockReturnValue(signedInClient() as never);
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(reconciledPhaseFivePicture)));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<FinancialDashboard />);
+
+    expect(await screen.findByText("995.2150 EUR")).toBeInTheDocument();
+    expect(screen.getByText("75.0000 EUR")).toBeInTheDocument();
+    expect(screen.getByText("540.0000 EUR")).toBeInTheDocument();
+    expect(screen.getByText("80.0000 USD")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Emergency reserve target progress" })).toHaveAttribute("aria-valuemax", "750.0000");
+    expect(screen.getByText((_, element) => element?.textContent === "1 accounting diagnostic requires attention. Unavailable values are not estimated.")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Accounting diagnostics" })).toHaveTextContent("SNAPSHOT_RESERVE_NON_EUR_BALANCE");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Portfolio" }));
+    expect(screen.getByText("3.500 units")).toBeInTheDocument();
+    expect(screen.getByText("35.350 EUR")).toBeInTheDocument();
+    expect(screen.getByText("32.860 EUR")).toBeInTheDocument();
   });
 
   it("creates a snapshot only after the owner explicitly refreshes", async () => {

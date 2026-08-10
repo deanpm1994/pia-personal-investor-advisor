@@ -323,7 +323,12 @@ function SnapshotStatus({ picture }: { picture: FinancialPicture }) {
         <div><dt className="text-ink-muted">Freshness</dt><dd className="font-medium capitalize text-ink">{picture.freshness.status}</dd></div>
       </dl>
       {picture.freshness.status === "stale" && <p className="mt-4 text-sm text-amber-800">New ledger inputs exist. Refresh explicitly to produce a current snapshot.</p>}
-      {incomplete && <p className="mt-4 text-sm text-amber-800">{picture.completeness.diagnostic_count} accounting diagnostic{picture.completeness.diagnostic_count === 1 ? "" : "s"} require attention. Unavailable values are not estimated.</p>}
+      {incomplete && <>
+        <p className="mt-4 text-sm text-amber-800">{picture.completeness.diagnostic_count} accounting diagnostic{picture.completeness.diagnostic_count === 1 ? "" : "s"} {picture.completeness.diagnostic_count === 1 ? "requires" : "require"} attention. Unavailable values are not estimated.</p>
+        <ul aria-label="Accounting diagnostics" className="mt-3 space-y-1 text-sm text-amber-800">
+          {picture.diagnostics.map((diagnostic) => <li key={`${diagnostic.code}-${diagnostic.account_id}`}>{diagnostic.code}</li>)}
+        </ul>
+      </>}
     </section>
   );
 }
