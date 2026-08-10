@@ -110,6 +110,13 @@ this version. They produce diagnostics and no canonical event. In particular,
 they must not be coerced into a trade, stock split, correction, reversal, or
 cash event.
 
+`MIGRATION`, `BONUS_ISSUE`, `BONUS_ISSUE_CANCELLED`, and
+`IPO_SUBSCRIPTION` are explicitly deferred pending source evidence and a
+separate approved implementation decision. Their evidence requirements and
+accounting consequences are recorded in
+[ADR 0008](../decisions/0008-ambiguous-trade-republic-records.md). They keep
+the batch ineligible for confirmation; they are not partial ledger facts.
+
 ## Test-only Phase 3 extension profile
 
 `trade-republic-csv-v1-phase3-test-only-extension` is a fixture-only contract,
