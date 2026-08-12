@@ -106,9 +106,10 @@ and timestamp are evidence, not an `source_reported_fx_conversion` event.
 
 The observed source values `DELIVERY`, `MIGRATION`, `BONUS_ISSUE`,
 `BONUS_ISSUE_CANCELLED`, and `IPO_SUBSCRIPTION` are deliberately not mapped by
-this version. They produce diagnostics and no canonical event. In particular,
-they must not be coerced into a trade, stock split, correction, reversal, or
-cash event.
+this version. After source-identity validation, they report the unsupported
+type and no canonical event; non-mapping validation does not add secondary row
+diagnostics. In particular, they must not be coerced into a trade, stock split,
+correction, reversal, or cash event.
 
 `MIGRATION`, `BONUS_ISSUE`, `BONUS_ISSUE_CANCELLED`, and
 `IPO_SUBSCRIPTION` are explicitly deferred pending source evidence and a

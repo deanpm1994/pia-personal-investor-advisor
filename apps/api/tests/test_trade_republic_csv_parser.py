@@ -138,6 +138,24 @@ def test_unmapped_observed_record_types_cannot_create_partial_ledger_facts() -> 
     )
 
 
+def test_unsupported_type_remains_the_only_row_diagnostic_when_its_date_differs() -> (
+    None
+):
+    source = _fixture_text("malformed/unsupported-observed-types.csv").replace(
+        "2026-07-03T09:01:00Z,2026-07-03",
+        "2026-07-03T09:01:00Z,2026-07-02",
+        1,
+    )
+
+    batch = parse_trade_republic_csv(source)
+
+    assert batch.confirmation_eligible is False
+    assert batch.rows[1].candidates == ()
+    assert [diagnostic.code for diagnostic in batch.rows[1].diagnostics] == [
+        "TRCSV013_UNSUPPORTED_SOURCE_TYPE"
+    ]
+
+
 def test_duplicate_source_component_blocks_the_entire_batch() -> None:
     lines = _fixture_text("accepted-observed.csv").splitlines()
     duplicate_row = lines[1]

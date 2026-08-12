@@ -329,8 +329,6 @@ def _parse_row(row_number: int, values: list[str]) -> TradeRepublicCsvStagedRow:
     if not transaction_id.strip():
         diagnostics.append(_diagnostic(DIAGNOSTIC_BLANK_TRANSACTION_ID, row_number))
 
-    occurred_at = _parse_datetime(row["datetime"], row_number, diagnostics)
-    _validate_date(row["date"], occurred_at, row_number, diagnostics)
     event_mapping = _BASE_EVENT_MAPPING.get(row["type"])
     if event_mapping is None:
         diagnostics.append(
@@ -346,6 +344,8 @@ def _parse_row(row_number: int, values: list[str]) -> TradeRepublicCsvStagedRow:
             diagnostics=tuple(diagnostics),
         )
 
+    occurred_at = _parse_datetime(row["datetime"], row_number, diagnostics)
+    _validate_date(row["date"], occurred_at, row_number, diagnostics)
     decimals = _parse_decimal_columns(row, row_number, diagnostics)
     _validate_currency_fields(row, row_number, diagnostics)
     fx_present = _validate_fx_triple(
