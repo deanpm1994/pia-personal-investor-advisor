@@ -48,8 +48,10 @@ counterparty field.
 
 `symbol` maps verbatim to `instrument_id`. It is not asserted to be an ISIN,
 and this mapping does not resolve or validate it against an external provider.
-For `BUY` and `SELL`, both a nonblank `symbol` and nonblank positive `shares`
-are required. `name`, `asset_class`, `account_type`, `category`, `price`,
+For `BUY` and `SELL`, both a nonblank `symbol` and nonzero `shares` are
+required. `BUY` shares must be positive. `SELL` shares may be positive or
+negative and are normalized to their absolute quantity because the event type
+determines the instrument direction. `name`, `asset_class`, `account_type`, `category`, `price`,
 `description`, counterparty fields, payment reference, and MCC are retained
 only as source context when a future staging implementation supports them; they
 do not change the event mapping below.
@@ -149,7 +151,7 @@ fixture-contract codes for P4.3; they are not a public HTTP response schema.
 | `TRCSV008_INVALID_SIGN` | A supported base amount is zero or has the wrong sign for its source type. |
 | `TRCSV009_INCOMPLETE_FX_TRIPLE` | Only some of `original_amount`, `original_currency`, and `fx_rate` are populated. |
 | `TRCSV010_MISSING_SECURITY_IDENTIFIER` | A `BUY` or `SELL` has a blank `symbol`. |
-| `TRCSV011_MISSING_SHARES` | A `BUY` or `SELL` has blank, zero, negative, or invalid `shares`. |
+| `TRCSV011_MISSING_SHARES` | A `BUY` has blank, zero, negative, or invalid `shares`, or a `SELL` has blank, zero, or invalid `shares`. |
 | `TRCSV012_FEE_OR_TAX_SIGN` | A nonzero `fee` or `tax` is positive. |
 | `TRCSV013_UNSUPPORTED_SOURCE_TYPE` | The source `type` is outside the strict observed mapping. |
 | `TRCSV014_DUPLICATE_SOURCE_IDENTITY` | A base, fee, or withholding-tax source reference duplicates an earlier row in the same batch. |

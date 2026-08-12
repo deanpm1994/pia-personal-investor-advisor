@@ -537,7 +537,10 @@ def _validate_event_semantics(
                 _diagnostic(DIAGNOSTIC_MISSING_SECURITY_IDENTIFIER, row_number)
             )
         shares = decimals["shares"]
-        if shares is None or shares <= 0:
+        shares_are_valid = shares is not None and (
+            shares > 0 if instrument_direction is MovementDirection.IN else shares != 0
+        )
+        if not shares_are_valid:
             diagnostics.append(_diagnostic(DIAGNOSTIC_MISSING_SHARES, row_number))
     for component in ("fee", "tax"):
         value = decimals[component]
@@ -583,7 +586,7 @@ def _build_candidates(
             InstrumentLeg(
                 direction=instrument_direction,
                 instrument_id=row["symbol"],
-                quantity=Quantity(value=shares),
+                quantity=Quantity(value=abs(shares)),
             )
         )
     source_reported_eur = None

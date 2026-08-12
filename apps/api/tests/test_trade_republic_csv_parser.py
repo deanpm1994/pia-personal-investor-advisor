@@ -90,6 +90,25 @@ def test_accepts_a_utf8_bom_and_valid_rfc4180_quoted_fields() -> None:
     assert batch.diagnostics == ()
 
 
+def test_accepts_negative_sell_shares_and_stages_an_absolute_quantity() -> None:
+    source = _fixture_text("accepted-observed.csv").replace(
+        "SELL,STOCK,Synthetic Alpha,SYNTH-ALPHA,1.000,90.00,90.00",
+        "SELL,STOCK,Synthetic Alpha,SYNTH-ALPHA,-1.000,90.00,90.00",
+        1,
+    )
+
+    batch = parse_trade_republic_csv(source)
+
+    sell = next(
+        candidate
+        for row in batch.rows
+        for candidate in row.candidates
+        if candidate.source_identity.event_reference == "synthetic-tr-sell:base"
+    )
+    assert batch.confirmation_eligible is True
+    assert sell.legs[1].quantity.value == Decimal("1.000")
+
+
 @pytest.mark.parametrize(
     ("fixture", "expected_code"),
     [
