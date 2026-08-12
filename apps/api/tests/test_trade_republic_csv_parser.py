@@ -124,6 +124,20 @@ def test_unsupported_test_only_extension_is_not_accepted_as_a_production_dialect
     assert all(not row.candidates for row in batch.rows)
 
 
+def test_unmapped_observed_record_types_cannot_create_partial_ledger_facts() -> None:
+    batch = parse_trade_republic_csv(
+        _fixture_text("malformed/unsupported-observed-types.csv")
+    )
+
+    assert batch.confirmation_eligible is False
+    assert all(not row.candidates for row in batch.rows)
+    assert all(
+        [diagnostic.code for diagnostic in row.diagnostics]
+        == ["TRCSV013_UNSUPPORTED_SOURCE_TYPE"]
+        for row in batch.rows
+    )
+
+
 def test_duplicate_source_component_blocks_the_entire_batch() -> None:
     lines = _fixture_text("accepted-observed.csv").splitlines()
     duplicate_row = lines[1]
