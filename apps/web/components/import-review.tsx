@@ -186,21 +186,11 @@ export function ImportReview() {
               Refresh status
             </button>
           </div>
-          {review.rows.map((row) => (
-            <div className="rounded border border-border p-3 text-sm" key={row.row_number}>
-              <strong>Row {row.row_number}</strong>
-              {row.events.map((event) => (
-                <p key={event.source_identity.event_reference}>
-                  {event.event_type}: {event.source_identity.event_reference}
-                </p>
-              ))}
-              {row.diagnostics.map((diagnostic, index) => (
-                <p className="text-red-700" key={`${diagnostic.code}-${index}`}>
-                  {diagnostic.code}: {diagnostic.message}
-                </p>
-              ))}
-            </div>
-          ))}
+          {review.diagnostic_count > 0 && (
+            <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              Some imported movements have unavailable accounting details. Holdings and cash flow remain source-based; affected cost-basis and return figures stay unavailable.
+            </p>
+          )}
           <button
             className="rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             disabled={state === "loading" || !review.confirmation_eligible}

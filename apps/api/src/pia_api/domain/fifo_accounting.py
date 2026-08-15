@@ -163,6 +163,8 @@ def replay_fifo_accounting(
                 realized_sales.append(sale)
         elif event_type is FinancialEventType.STOCK_SPLIT:
             _apply_split(entry, lots, diagnose)
+        elif event_type is FinancialEventType.OBSERVED_POSITION_MOVEMENT:
+            diagnose(entry, "FIFO_UNKNOWN_BASIS")
         elif event_type in {
             FinancialEventType.CORRECTION,
             FinancialEventType.REVERSAL,
