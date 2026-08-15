@@ -123,7 +123,10 @@ describe("FinancialDashboard", () => {
     expect(screen.getByText("80.0000 USD")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Emergency reserve target progress" })).toHaveAttribute("aria-valuemax", "750.0000");
     expect(screen.getByText((_, element) => element?.textContent === "1 accounting diagnostic requires attention. Unavailable values are not estimated.")).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "Accounting diagnostics" })).toHaveTextContent("SNAPSHOT_RESERVE_NON_EUR_BALANCE");
+    expect(screen.getByRole("list", { name: "Accounting diagnostics" })).toHaveTextContent(
+      "1 non-EUR reserve balance cannot be included in EUR reserve progress.",
+    );
+    expect(screen.queryByText("SNAPSHOT_RESERVE_NON_EUR_BALANCE")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Portfolio" }));
     expect(screen.getByText("3.500 units")).toBeInTheDocument();
@@ -210,6 +213,33 @@ describe("FinancialDashboard", () => {
     expect(await screen.findByText("New ledger inputs exist. Refresh explicitly to produce a current snapshot.")).toBeInTheDocument();
     expect(screen.getByText("2 accounting diagnostics require attention. Unavailable values are not estimated.")).toBeInTheDocument();
     expect(screen.getByText("Progress is incomplete because some reserve evidence cannot be represented in EUR.")).toBeInTheDocument();
+  });
+
+  it("groups repeated FIFO diagnostics into plain-language completeness summaries", async () => {
+    getClient.mockReturnValue(signedInClient() as never);
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ...picture,
+          state: "incomplete",
+          completeness: { status: "incomplete", diagnostic_count: 3 },
+          diagnostics: [
+            { account_id: "cash-1", code: "FIFO_UNKNOWN_BASIS", evidence_event_ids: ["event-1"] },
+            { account_id: "cash-1", code: "FIFO_UNKNOWN_BASIS", evidence_event_ids: ["event-2"] },
+            { account_id: "cash-1", code: "FIFO_UNREPRESENTABLE_PRECISION", evidence_event_ids: ["event-3"] },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<FinancialDashboard />);
+
+    expect(await screen.findByText("3 accounting diagnostics require attention. Unavailable values are not estimated.")).toBeInTheDocument();
+    const summaries = screen.getByRole("list", { name: "Accounting diagnostics" });
+    expect(summaries).toHaveTextContent("2 recorded position movements have no broker-reported cost basis.");
+    expect(summaries).toHaveTextContent("1 sale cannot be represented at the broker-reported quantity precision.");
+    expect(screen.queryByText("FIFO_UNKNOWN_BASIS")).not.toBeInTheDocument();
+    expect(screen.queryByText("FIFO_UNREPRESENTABLE_PRECISION")).not.toBeInTheDocument();
   });
 
   it("explains unavailable reserve targets and failures clearly", async () => {

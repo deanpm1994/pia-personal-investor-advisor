@@ -84,6 +84,31 @@ function accountRoleLabel(role: AccountSummary["role"]) {
   return role.replaceAll("_", " ");
 }
 
+function plural(count: number, singular: string, pluralForm = `${singular}s`) {
+  return count === 1 ? singular : pluralForm;
+}
+
+function accountingDiagnosticSummary(code: string, count: number) {
+  if (code === "FIFO_UNKNOWN_BASIS") {
+    return `${count} recorded ${plural(count, "position movement")} ${count === 1 ? "has" : "have"} no broker-reported cost basis. Holdings are shown, but FIFO cost basis and returns stay unavailable.`;
+  }
+  if (code === "FIFO_UNREPRESENTABLE_PRECISION") {
+    return `${count} ${plural(count, "sale")} cannot be represented at the broker-reported quantity precision. ${count === 1 ? "Its realized result stays unavailable." : "Their realized results stay unavailable."}`;
+  }
+  if (code === "SNAPSHOT_RESERVE_NON_EUR_BALANCE") {
+    return `${count} non-EUR reserve ${plural(count, "balance")} cannot be included in EUR reserve progress.`;
+  }
+  return `${count} ${plural(count, "accounting item")} need attention. Affected values stay unavailable rather than estimated.`;
+}
+
+function groupAccountingDiagnostics(diagnostics: FinancialPicture["diagnostics"]) {
+  const counts = new Map<string, number>();
+  for (const diagnostic of diagnostics) {
+    counts.set(diagnostic.code, (counts.get(diagnostic.code) ?? 0) + 1);
+  }
+  return [...counts].map(([code, count]) => ({ code, count }));
+}
+
 function ariaRangeValue(decimal: string) {
   // ARIA numeric tokens accept Decimal strings; retain the API's exact value rather than converting money to a float.
   return decimal as unknown as number;
@@ -314,6 +339,7 @@ function ReserveProgress({ reserve }: { reserve: FinancialPicture["reserve_progr
 
 function SnapshotStatus({ picture }: { picture: FinancialPicture }) {
   const incomplete = picture.completeness.status === "incomplete";
+  const diagnosticSummaries = groupAccountingDiagnostics(picture.diagnostics);
   return (
     <section className="rounded-panel border border-border bg-surface p-5" aria-labelledby="snapshot-heading">
       <h2 className="text-lg font-semibold text-ink" id="snapshot-heading">Snapshot status</h2>
@@ -326,7 +352,7 @@ function SnapshotStatus({ picture }: { picture: FinancialPicture }) {
       {incomplete && <>
         <p className="mt-4 text-sm text-amber-800">{picture.completeness.diagnostic_count} accounting diagnostic{picture.completeness.diagnostic_count === 1 ? "" : "s"} {picture.completeness.diagnostic_count === 1 ? "requires" : "require"} attention. Unavailable values are not estimated.</p>
         <ul aria-label="Accounting diagnostics" className="mt-3 space-y-1 text-sm text-amber-800">
-          {picture.diagnostics.map((diagnostic) => <li key={`${diagnostic.code}-${diagnostic.account_id}`}>{diagnostic.code}</li>)}
+          {diagnosticSummaries.map(({ code, count }) => <li key={code}>{accountingDiagnosticSummary(code, count)}</li>)}
         </ul>
       </>}
     </section>
