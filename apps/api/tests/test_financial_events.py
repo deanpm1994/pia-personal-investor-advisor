@@ -160,6 +160,16 @@ def test_source_reported_eur_evidence_requires_explicit_eur_facts() -> None:
             [_cash(MovementDirection.OUT)],
             "reversal_of_event_id",
         ),
+        (
+            FinancialEventType.OBSERVED_POSITION_MOVEMENT,
+            [_instrument(MovementDirection.IN)],
+            None,
+        ),
+        (
+            FinancialEventType.OBSERVED_CASH_MOVEMENT,
+            [_cash(MovementDirection.OUT)],
+            None,
+        ),
     ],
 )
 def test_each_baseline_event_type_accepts_its_normalized_movement_shape(

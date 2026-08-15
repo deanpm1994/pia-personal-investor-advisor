@@ -163,6 +163,8 @@ class FinancialEventType(StrEnum):
     STOCK_SPLIT = "stock_split"
     CORRECTION = "correction"
     REVERSAL = "reversal"
+    OBSERVED_POSITION_MOVEMENT = "observed_position_movement"
+    OBSERVED_CASH_MOVEMENT = "observed_cash_movement"
 
 
 class FinancialEvent(FinancialContract):
@@ -218,6 +220,10 @@ class FinancialEvent(FinancialContract):
             self._require_fx_conversion()
         elif self.event_type is FinancialEventType.STOCK_SPLIT:
             self._require_stock_split()
+        elif self.event_type is FinancialEventType.OBSERVED_POSITION_MOVEMENT:
+            self._require_single_instrument()
+        elif self.event_type is FinancialEventType.OBSERVED_CASH_MOVEMENT:
+            self._require_single_cash_any_direction()
         return self
 
     def _validate_correction_link(self) -> None:
@@ -248,6 +254,14 @@ class FinancialEvent(FinancialContract):
             raise ValueError("event requires exactly one cash leg")
         if self.legs[0].direction is not direction:
             raise ValueError("cash leg has an invalid movement direction")
+
+    def _require_single_cash_any_direction(self) -> None:
+        if len(self.legs) != 1 or not isinstance(self.legs[0], CashLeg):
+            raise ValueError("event requires exactly one cash leg")
+
+    def _require_single_instrument(self) -> None:
+        if len(self.legs) != 1 or not isinstance(self.legs[0], InstrumentLeg):
+            raise ValueError("event requires exactly one instrument leg")
 
     def _require_trade(
         self,
