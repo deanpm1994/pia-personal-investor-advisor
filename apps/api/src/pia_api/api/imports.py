@@ -31,6 +31,7 @@ class ImportReviewResponse(BaseModel):
     row_count: int
     event_count: int
     diagnostic_count: int
+    observed_event_count: int = 0
     confirmation_eligible: bool
     diagnostics: list[DiagnosticResponse] = Field(default_factory=list)
     rows: list[RowReviewResponse]

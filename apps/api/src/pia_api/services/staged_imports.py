@@ -302,6 +302,12 @@ class SupabaseStagedImportGateway:
             "row_count": len(review_rows),
             "event_count": sum(len(row["events"]) for row in review_rows),
             "diagnostic_count": len(diagnostics.json()),
+            "observed_event_count": sum(
+                event.get("event_type")
+                in {"observed_cash_movement", "observed_position_movement"}
+                for row in review_rows
+                for event in row["events"]
+            ),
             "confirmation_eligible": trusted and status == "review_ready",
             "diagnostics": batch_diagnostics,
             "rows": review_rows,

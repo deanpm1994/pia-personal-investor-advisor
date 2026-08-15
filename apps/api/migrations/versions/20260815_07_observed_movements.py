@@ -1,7 +1,7 @@
 """Persist source-faithful movements whose basis or settlement is unavailable.
 
 Revision ID: 20260815_07
-Revises: 20260723_06
+Revises: 20260807_10
 Create Date: 2026-08-15 00:00:00
 """
 
@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "20260815_07"
-down_revision: str | Sequence[str] | None = "20260723_06"
+down_revision: str | Sequence[str] | None = "20260807_10"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

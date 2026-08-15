@@ -50,8 +50,9 @@ confirmed ledger history remains accountable under ADR 0007.
 ### Future implementation boundary
 
 A future implementation requires a separate approved issue and a new ADR
-before changing the v1 parser, ledger vocabulary, or accounting behavior. The
-ADR must specify the canonical events and legs, durable source grouping,
+before reclassifying these observed movements as complete canonical events or
+changing their accounting behavior. The ADR must specify the canonical events
+and legs, durable source grouping,
 source-currency and EUR-evidence handling, FIFO-basis consequences,
 correction/cancellation links, and completeness diagnostics. It must not
 derive any of those facts from descriptions, IDs, file order, market data, or
@@ -73,9 +74,11 @@ identifiers, account details, counterparties, IBANs, or real financial values.
 
 ## Consequences
 
-No amendment to ADR 0007 is needed because this decision introduces no replay,
-FIFO, or snapshot rule. It records an importer and financial-correctness
-boundary alongside ADR 0005 and ADR 0006. Any future supported bonus action
-will require a new ADR because it changes the canonical event vocabulary or
-lot-basis meaning; a future settled IPO may use `buy` only after its source
-evidence proves the existing buy contract exactly.
+No amendment to ADR 0007 is needed because observed movements preserve its
+incomplete-result rule: the accounting replay includes explicit quantity or
+cash while suppressing unsupported FIFO and return claims. This decision
+records an importer and financial-correctness boundary alongside ADR 0005 and
+ADR 0006. Any future supported bonus action will require a new ADR because it
+would reclassify an observed movement and change its lot-basis meaning; a
+future settled IPO may use `buy` only after its source evidence proves the
+existing buy contract exactly.
