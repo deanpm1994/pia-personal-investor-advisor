@@ -97,6 +97,9 @@ _BASE_EVENT_MAPPING: dict[
     "INTEREST_PAYMENT": (FinancialEventType.INTEREST, MovementDirection.IN, None),
 }
 
+_OBSERVED_POSITION_TYPES = {"MIGRATION", "BONUS_ISSUE", "BONUS_ISSUE_CANCELLED"}
+_OBSERVED_CASH_TYPES = {"IPO_SUBSCRIPTION"}
+
 
 class TradeRepublicCsvDiagnostic(FinancialContract):
     """An actionable parser diagnostic tied to a source row where available."""
@@ -330,7 +333,18 @@ def _parse_row(row_number: int, values: list[str]) -> TradeRepublicCsvStagedRow:
         diagnostics.append(_diagnostic(DIAGNOSTIC_BLANK_TRANSACTION_ID, row_number))
 
     event_mapping = _BASE_EVENT_MAPPING.get(row["type"])
+    if row["type"] == "BUY" and not row["amount"]:
+        observed_row = _parse_observed_row(row_number, row, diagnostics)
+        assert observed_row is not None
+        return observed_row
+    if row["type"] == "DIVIDEND" and row["amount"].startswith("-"):
+        observed_row = _parse_observed_row(row_number, row, diagnostics)
+        assert observed_row is not None
+        return observed_row
     if event_mapping is None:
+        observed_row = _parse_observed_row(row_number, row, diagnostics)
+        if observed_row is not None:
+            return observed_row
         diagnostics.append(
             _diagnostic(
                 DIAGNOSTIC_UNSUPPORTED_SOURCE_TYPE,
@@ -370,6 +384,111 @@ def _parse_row(row_number: int, values: list[str]) -> TradeRepublicCsvStagedRow:
             row, decimals, event_mapping, occurred_at, fx_present
         ),
     )
+
+
+def _parse_observed_row(
+    row_number: int,
+    row: dict[str, str],
+    diagnostics: list[TradeRepublicCsvDiagnostic],
+) -> TradeRepublicCsvStagedRow | None:
+    source_type = row["type"]
+    is_cashless_buy = source_type == "BUY" and not row["amount"]
+    is_dividend_correction = source_type == "DIVIDEND" and row["amount"].startswith("-")
+    if (
+        source_type not in _OBSERVED_POSITION_TYPES | _OBSERVED_CASH_TYPES
+        and not is_cashless_buy
+        and not is_dividend_correction
+    ):
+        return None
+    occurred_at = _parse_datetime(row["datetime"], row_number, diagnostics)
+    if source_type in _OBSERVED_POSITION_TYPES or is_cashless_buy:
+        shares = _observed_decimal(row, "shares", row_number, diagnostics)
+        if not row["symbol"].strip():
+            diagnostics.append(
+                _diagnostic(DIAGNOSTIC_MISSING_SECURITY_IDENTIFIER, row_number)
+            )
+        if shares is None or shares == 0:
+            diagnostics.append(_diagnostic(DIAGNOSTIC_MISSING_SHARES, row_number))
+        if diagnostics:
+            return TradeRepublicCsvStagedRow(
+                row_number=row_number, source_row=row, diagnostics=tuple(diagnostics)
+            )
+        assert occurred_at is not None and shares is not None
+        direction = MovementDirection.IN if shares > 0 else MovementDirection.OUT
+        return TradeRepublicCsvStagedRow(
+            row_number=row_number,
+            source_row=row,
+            candidates=(
+                TradeRepublicCsvStagedEvent(
+                    source_identity=SourceIdentity(
+                        provider=PROVIDER_NAME,
+                        event_reference=f"{row['transaction_id']}:observed-position",
+                    ),
+                    event_type=FinancialEventType.OBSERVED_POSITION_MOVEMENT,
+                    occurred_at=occurred_at,
+                    legs=(
+                        InstrumentLeg(
+                            direction=direction,
+                            instrument_id=row["symbol"],
+                            quantity=Quantity(value=abs(shares)),
+                        ),
+                    ),
+                    source_group_reference=row["transaction_id"],
+                ),
+            ),
+        )
+    amount = _observed_decimal(row, "amount", row_number, diagnostics)
+    if not _CURRENCY.fullmatch(row["currency"]):
+        diagnostics.append(_diagnostic(DIAGNOSTIC_INVALID_CURRENCY, row_number))
+    if amount is None or amount == 0:
+        diagnostics.append(_diagnostic(DIAGNOSTIC_INVALID_SIGN, row_number))
+    if diagnostics:
+        return TradeRepublicCsvStagedRow(
+            row_number=row_number, source_row=row, diagnostics=tuple(diagnostics)
+        )
+    assert occurred_at is not None and amount is not None
+    return TradeRepublicCsvStagedRow(
+        row_number=row_number,
+        source_row=row,
+        candidates=(
+            TradeRepublicCsvStagedEvent(
+                source_identity=SourceIdentity(
+                    provider=PROVIDER_NAME,
+                    event_reference=f"{row['transaction_id']}:observed-cash",
+                ),
+                event_type=FinancialEventType.OBSERVED_CASH_MOVEMENT,
+                occurred_at=occurred_at,
+                legs=(
+                    CashLeg(
+                        direction=MovementDirection.IN
+                        if amount > 0
+                        else MovementDirection.OUT,
+                        money=Money(amount=abs(amount), currency=row["currency"]),
+                    ),
+                ),
+                source_group_reference=row["transaction_id"],
+            ),
+        ),
+    )
+
+
+def _observed_decimal(
+    row: dict[str, str],
+    column: str,
+    row_number: int,
+    diagnostics: list[TradeRepublicCsvDiagnostic],
+) -> Decimal | None:
+    value = row[column]
+    if not value or not _DECIMAL.fullmatch(value):
+        diagnostics.append(
+            _diagnostic(
+                DIAGNOSTIC_INVALID_DECIMAL,
+                row_number,
+                f"{column} must be a finite dot-decimal value",
+            )
+        )
+        return None
+    return Decimal(value)
 
 
 def _parse_datetime(

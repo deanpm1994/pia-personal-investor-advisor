@@ -143,34 +143,39 @@ def test_unsupported_test_only_extension_is_not_accepted_as_a_production_dialect
     assert all(not row.candidates for row in batch.rows)
 
 
-def test_unmapped_observed_record_types_cannot_create_partial_ledger_facts() -> None:
+def test_observed_record_types_create_source_faithful_movement_candidates() -> None:
     batch = parse_trade_republic_csv(
         _fixture_text("malformed/unsupported-observed-types.csv")
     )
 
     assert batch.confirmation_eligible is False
-    assert all(not row.candidates for row in batch.rows)
-    assert all(
-        [diagnostic.code for diagnostic in row.diagnostics]
-        == ["TRCSV013_UNSUPPORTED_SOURCE_TYPE"]
-        for row in batch.rows
-    )
+    assert [
+        candidate.event_type.value for row in batch.rows for candidate in row.candidates
+    ] == [
+        "observed_position_movement",
+        "observed_position_movement",
+        "observed_position_movement",
+        "observed_cash_movement",
+    ]
+    assert [diagnostic.code for diagnostic in batch.rows[0].diagnostics] == [
+        "TRCSV013_UNSUPPORTED_SOURCE_TYPE"
+    ]
 
 
 def test_unsupported_type_remains_the_only_row_diagnostic_when_its_date_differs() -> (
     None
 ):
     source = _fixture_text("malformed/unsupported-observed-types.csv").replace(
-        "2026-07-03T09:01:00Z,2026-07-03",
-        "2026-07-03T09:01:00Z,2026-07-02",
+        "2026-07-03T09:00:00Z,2026-07-03",
+        "2026-07-03T09:00:00Z,2026-07-02",
         1,
     )
 
     batch = parse_trade_republic_csv(source)
 
     assert batch.confirmation_eligible is False
-    assert batch.rows[1].candidates == ()
-    assert [diagnostic.code for diagnostic in batch.rows[1].diagnostics] == [
+    assert batch.rows[0].candidates == ()
+    assert [diagnostic.code for diagnostic in batch.rows[0].diagnostics] == [
         "TRCSV013_UNSUPPORTED_SOURCE_TYPE"
     ]
 
