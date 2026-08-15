@@ -329,8 +329,6 @@ def _parse_row(row_number: int, values: list[str]) -> TradeRepublicCsvStagedRow:
     if not transaction_id.strip():
         diagnostics.append(_diagnostic(DIAGNOSTIC_BLANK_TRANSACTION_ID, row_number))
 
-    occurred_at = _parse_datetime(row["datetime"], row_number, diagnostics)
-    _validate_date(row["date"], occurred_at, row_number, diagnostics)
     event_mapping = _BASE_EVENT_MAPPING.get(row["type"])
     if event_mapping is None:
         diagnostics.append(
@@ -346,6 +344,8 @@ def _parse_row(row_number: int, values: list[str]) -> TradeRepublicCsvStagedRow:
             diagnostics=tuple(diagnostics),
         )
 
+    occurred_at = _parse_datetime(row["datetime"], row_number, diagnostics)
+    _validate_date(row["date"], occurred_at, row_number, diagnostics)
     decimals = _parse_decimal_columns(row, row_number, diagnostics)
     _validate_currency_fields(row, row_number, diagnostics)
     fx_present = _validate_fx_triple(
@@ -537,7 +537,10 @@ def _validate_event_semantics(
                 _diagnostic(DIAGNOSTIC_MISSING_SECURITY_IDENTIFIER, row_number)
             )
         shares = decimals["shares"]
-        if shares is None or shares <= 0:
+        shares_are_valid = shares is not None and (
+            shares > 0 if instrument_direction is MovementDirection.IN else shares != 0
+        )
+        if not shares_are_valid:
             diagnostics.append(_diagnostic(DIAGNOSTIC_MISSING_SHARES, row_number))
     for component in ("fee", "tax"):
         value = decimals[component]
@@ -583,7 +586,7 @@ def _build_candidates(
             InstrumentLeg(
                 direction=instrument_direction,
                 instrument_id=row["symbol"],
-                quantity=Quantity(value=shares),
+                quantity=Quantity(value=abs(shares)),
             )
         )
     source_reported_eur = None

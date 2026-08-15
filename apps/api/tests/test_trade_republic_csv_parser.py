@@ -90,6 +90,25 @@ def test_accepts_a_utf8_bom_and_valid_rfc4180_quoted_fields() -> None:
     assert batch.diagnostics == ()
 
 
+def test_accepts_negative_sell_shares_and_stages_an_absolute_quantity() -> None:
+    source = _fixture_text("accepted-observed.csv").replace(
+        "SELL,STOCK,Synthetic Alpha,SYNTH-ALPHA,1.000,90.00,90.00",
+        "SELL,STOCK,Synthetic Alpha,SYNTH-ALPHA,-1.000,90.00,90.00",
+        1,
+    )
+
+    batch = parse_trade_republic_csv(source)
+
+    sell = next(
+        candidate
+        for row in batch.rows
+        for candidate in row.candidates
+        if candidate.source_identity.event_reference == "synthetic-tr-sell:base"
+    )
+    assert batch.confirmation_eligible is True
+    assert sell.legs[1].quantity.value == Decimal("1.000")
+
+
 @pytest.mark.parametrize(
     ("fixture", "expected_code"),
     [
@@ -136,6 +155,24 @@ def test_unmapped_observed_record_types_cannot_create_partial_ledger_facts() -> 
         == ["TRCSV013_UNSUPPORTED_SOURCE_TYPE"]
         for row in batch.rows
     )
+
+
+def test_unsupported_type_remains_the_only_row_diagnostic_when_its_date_differs() -> (
+    None
+):
+    source = _fixture_text("malformed/unsupported-observed-types.csv").replace(
+        "2026-07-03T09:01:00Z,2026-07-03",
+        "2026-07-03T09:01:00Z,2026-07-02",
+        1,
+    )
+
+    batch = parse_trade_republic_csv(source)
+
+    assert batch.confirmation_eligible is False
+    assert batch.rows[1].candidates == ()
+    assert [diagnostic.code for diagnostic in batch.rows[1].diagnostics] == [
+        "TRCSV013_UNSUPPORTED_SOURCE_TYPE"
+    ]
 
 
 def test_duplicate_source_component_blocks_the_entire_batch() -> None:
