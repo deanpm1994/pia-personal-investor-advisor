@@ -68,12 +68,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Restore prior write validation without deleting immutable observations."""
     op.execute(
         "DROP TRIGGER observed_financial_event_shape_check "
         "ON public.financial_event_legs"
     )
     op.execute("DROP FUNCTION public.enforce_observed_financial_event_shape()")
     op.execute(
+        # Existing observed facts remain auditable when rolling back; PostgreSQL
+        # still enforces the restored restriction for every later write.
         "ALTER TABLE public.financial_events "
         "DROP CONSTRAINT financial_events_event_type_check"
     )
@@ -81,5 +84,5 @@ def downgrade() -> None:
         "ALTER TABLE public.financial_events "
         "ADD CONSTRAINT financial_events_event_type_check "
         "CHECK (event_type NOT IN "
-        "('observed_position_movement', 'observed_cash_movement'))"
+        "('observed_position_movement', 'observed_cash_movement')) NOT VALID"
     )
