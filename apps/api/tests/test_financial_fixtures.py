@@ -30,8 +30,12 @@ from pia_api.domain.financial_events import (
 
 
 def test_fixture_history_covers_the_canonical_event_vocabulary() -> None:
-    assert {fixture.event.event_type for fixture in FIXTURE_HISTORY} == set(
-        FinancialEventType
+    assert {fixture.event.event_type for fixture in FIXTURE_HISTORY} == (
+        set(FinancialEventType)
+        - {
+            FinancialEventType.OBSERVED_POSITION_MOVEMENT,
+            FinancialEventType.OBSERVED_CASH_MOVEMENT,
+        }
     )
 
 

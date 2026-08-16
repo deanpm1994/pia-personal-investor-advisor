@@ -913,6 +913,75 @@ def test_trusted_parser_staging_can_be_confirmed(database_url: str) -> None:
             )
 
 
+def test_trusted_observed_movements_can_be_confirmed(database_url: str) -> None:
+    """Observed cash and position facts must survive the production RPC path."""
+    owner_id = uuid.uuid4()
+    source = (
+        Path(__file__).parent
+        / "fixtures/trade_republic_csv_v1/malformed/unsupported-observed-types.csv"
+    ).read_text(encoding="utf-8")
+    content = "\n".join(
+        line for line in source.splitlines() if ",DELIVERY," not in line
+    ).encode()
+    batch = parse_trade_republic_csv(content)
+    import_id = str(uuid.uuid4())
+
+    assert batch.confirmation_eligible is True
+
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection,
+                owner_id,
+                f"observed-confirm-{owner_id}@example.test",
+            )
+
+        asyncio.run(
+            TrustedStagedImportWriter(Settings()).stage(
+                user_id=str(owner_id),
+                import_id=import_id,
+                path=f"{owner_id}/imports/{import_id}.csv",
+                filename="synthetic-observed.csv",
+                content_type="text/csv",
+                content=content,
+                batch=batch,
+            )
+        )
+
+        with psycopg.connect(database_url) as owner_connection:
+            with owner_connection.transaction():
+                _as_authenticated_user(owner_connection, owner_id)
+                assert owner_connection.execute(
+                    "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
+                ).fetchone() == (4, False)
+                assert owner_connection.execute(
+                    """
+                    SELECT name, role
+                    FROM public.financial_accounts
+                    WHERE user_id = %s
+                    """,
+                    (owner_id,),
+                ).fetchall() == [("Brokerage account", "brokerage")]
+                assert owner_connection.execute(
+                    """
+                    SELECT event_type, count(*)
+                    FROM public.financial_events
+                    WHERE staged_import_id = %s
+                    GROUP BY event_type
+                    ORDER BY event_type
+                    """,
+                    (import_id,),
+                ).fetchall() == [
+                    ("observed_cash_movement", 1),
+                    ("observed_position_movement", 3),
+                ]
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id = %s", (owner_id,)
+            )
+
+
 def test_staged_import_confirmation_rolls_back_on_invalid_ledger_history(
     database_url: str,
 ) -> None:

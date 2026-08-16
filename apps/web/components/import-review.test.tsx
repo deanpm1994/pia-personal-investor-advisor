@@ -15,6 +15,7 @@ const validReview = {
   row_count: 1,
   event_count: 1,
   diagnostic_count: 0,
+  observed_event_count: 0,
   confirmation_eligible: true,
   rows: [
     {
@@ -73,7 +74,7 @@ describe("ImportReview", () => {
 
     chooseCsv();
 
-    expect(await screen.findByText("buy: TR-1")).toBeInTheDocument();
+    expect(await screen.findByText("1 rows · 1 events · 0 diagnostics")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm import" })).toBeEnabled();
     expect(screen.queryByText("synthetic csv")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -85,7 +86,7 @@ describe("ImportReview", () => {
     );
   });
 
-  it("shows row diagnostics and blocks confirmation for invalid batches", async () => {
+  it("shows an aggregate completeness notice and blocks invalid imports", async () => {
     getClient.mockReturnValue(signedInClient() as never);
     fetchMock.mockResolvedValue(
       new Response(
@@ -93,6 +94,7 @@ describe("ImportReview", () => {
           ...validReview,
           confirmation_eligible: false,
           diagnostic_count: 1,
+          observed_event_count: 0,
           rows: [
             {
               row_number: 2,
@@ -109,7 +111,7 @@ describe("ImportReview", () => {
 
     chooseCsv();
 
-    expect(await screen.findByText("TRCSV007: Invalid amount")).toBeInTheDocument();
+    expect(await screen.findByText(/Some imported movements have unavailable accounting details/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm import" })).toBeDisabled();
   });
 
@@ -127,11 +129,11 @@ describe("ImportReview", () => {
     render(<ImportReview />);
 
     chooseCsv();
-    await screen.findByText("buy: TR-1");
+    await screen.findByText("1 rows · 1 events · 0 diagnostics");
     fireEvent.click(screen.getByRole("button", { name: "Confirm import" }));
 
-    expect(await screen.findByText("Import confirmed. Ledger events were recorded.")).toHaveTextContent(
-      "Import confirmed. Ledger events were recorded.",
+    expect(await screen.findByText("Import confirmed. Refresh the financial picture to view recorded holdings and cash flow.")).toHaveTextContent(
+      "Import confirmed. Refresh the financial picture to view recorded holdings and cash flow.",
     );
     expect(fetchMock).toHaveBeenLastCalledWith(
       "http://localhost:8000/v1/imports/import-1/confirm",
@@ -152,7 +154,7 @@ describe("ImportReview", () => {
     render(<ImportReview />);
 
     chooseCsv();
-    await screen.findByText("buy: TR-1");
+    await screen.findByText("1 rows · 1 events · 0 diagnostics");
     fireEvent.click(screen.getByRole("button", { name: "Confirm import" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -160,7 +162,7 @@ describe("ImportReview", () => {
     );
   });
 
-  it("renders every diagnostic when a row has repeated diagnostic codes", async () => {
+  it("does not expose repeated row diagnostics", async () => {
     getClient.mockReturnValue(signedInClient() as never);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     fetchMock.mockResolvedValue(
@@ -169,6 +171,7 @@ describe("ImportReview", () => {
           ...validReview,
           confirmation_eligible: false,
           diagnostic_count: 2,
+          observed_event_count: 0,
           rows: [
             {
               row_number: 2,
@@ -188,10 +191,27 @@ describe("ImportReview", () => {
 
     chooseCsv();
 
-    expect(await screen.findByText("TRCSV008_INVALID_SIGN: First sign mismatch")).toBeInTheDocument();
-    expect(screen.getByText("TRCSV008_INVALID_SIGN: Second sign mismatch")).toBeInTheDocument();
+    expect(await screen.findByText(/Some imported movements have unavailable accounting details/)).toBeInTheDocument();
+    expect(screen.queryByText("TRCSV008_INVALID_SIGN: First sign mismatch")).not.toBeInTheDocument();
     expect(consoleError.mock.calls.flat().join(" ")).not.toContain("same key");
     consoleError.mockRestore();
+  });
+
+  it("shows a completeness notice for observed movements without exposing source rows", async () => {
+    getClient.mockReturnValue(signedInClient() as never);
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ ...validReview, observed_event_count: 3 }),
+        { status: 201 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ImportReview />);
+
+    chooseCsv();
+
+    expect(await screen.findByText(/Some imported movements have unavailable accounting details/)).toBeInTheDocument();
+    expect(screen.queryByText("TR-1")).not.toBeInTheDocument();
   });
 
   it("shows a staging failure when the upload request cannot complete", async () => {
@@ -220,7 +240,7 @@ describe("ImportReview", () => {
     render(<ImportReview />);
 
     chooseCsv();
-    await screen.findByText("buy: TR-1");
+    await screen.findByText("1 rows · 1 events · 0 diagnostics");
     fireEvent.click(screen.getByRole("button", { name: "Refresh status" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("Refreshing import status…");
