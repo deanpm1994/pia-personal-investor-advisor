@@ -77,6 +77,6 @@ jobs:
       - run: supabase migration up --local
       - run: pnpm db:migrate
       - run: pnpm check
-      - run: PIA_RUN_LOCAL_SUPABASE_TESTS=1 uv run --directory apps/api pytest tests/test_profile_rls.py
+      - run: pnpm run test:api:local-supabase
       - if: always()
         run: supabase stop --no-backup
