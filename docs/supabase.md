@@ -107,20 +107,26 @@ server-only database connection. The database enforces
 `staged → parsed → validated → blocked`; confirmation additionally requires
 server-written provenance, so a client cannot manufacture a review-ready batch.
 
-To run the local-Supabase isolation and migration rollback/upgrade tests after
-starting the stack and applying migrations, run from `apps/api`:
+To run the approved Phase 5 local-Supabase integration suite after starting the
+stack and applying migrations, run from the repository root:
 
 ```sh
-PIA_RUN_LOCAL_SUPABASE_TESTS=1 uv run pytest tests/test_profile_rls.py
+pnpm run test:api:local-supabase
 ```
+
+The command deliberately enumerates the owner/RLS, manual-account, and
+immutable-snapshot suites. This keeps the financial and security boundary
+explicit while ensuring every test requires the `PIA_RUN_LOCAL_SUPABASE_TESTS`
+opt-in and uses only ephemeral local-Supabase data.
 
 ## Pull-request security integration
 
 The `Supabase security integration` job in the pull-request workflow creates
 only ephemeral local Supabase state. It prepares the ignored local signing key,
 starts Supabase, applies the infrastructure and Alembic migration histories,
-and runs the API quality suite plus the opt-in ownership, audit-event, and
-private-storage authorization tests.
+and runs `pnpm check` plus the full opt-in Phase 5 suite for ownership and RLS,
+manual accounts, and immutable snapshots. A failure in any included test fails
+the pull-request check.
 
 After this job succeeds on a pull request, configure `Supabase security
 integration` as a required check for `develop` and `main`. Do not make it a

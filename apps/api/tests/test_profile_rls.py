@@ -975,6 +975,26 @@ def test_trusted_observed_movements_can_be_confirmed(database_url: str) -> None:
                     ("observed_cash_movement", 1),
                     ("observed_position_movement", 3),
                 ]
+        from alembic import command
+        from alembic.config import Config
+
+        config = Config("alembic.ini")
+        command.downgrade(config, "20260807_10")
+        with psycopg.connect(database_url) as connection:
+            assert connection.execute(
+                """
+                SELECT event_type, count(*)
+                FROM public.financial_events
+                WHERE staged_import_id = %s
+                GROUP BY event_type
+                ORDER BY event_type
+                """,
+                (import_id,),
+            ).fetchall() == [
+                ("observed_cash_movement", 1),
+                ("observed_position_movement", 3),
+            ]
+        command.upgrade(config, "head")
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
             admin_connection.execute(
