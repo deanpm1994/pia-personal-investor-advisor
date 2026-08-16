@@ -21,6 +21,7 @@ type Review = {
   row_count: number;
   event_count: number;
   diagnostic_count: number;
+  observed_event_count: number;
   confirmation_eligible: boolean;
   rows: ReviewRow[];
 };
@@ -127,7 +128,7 @@ export function ImportReview() {
 
       setReview((await response.json()) as Review);
       setState("empty");
-      setConfirmationMessage("Import confirmed. Ledger events were recorded.");
+      setConfirmationMessage("Import confirmed. Refresh the financial picture to view recorded holdings and cash flow.");
     } catch {
       setState("error");
       setMessage("Unable to confirm this import. Refresh or retry safely to check its status.");
@@ -143,7 +144,7 @@ export function ImportReview() {
         Import Trade Republic CSV
       </h2>
       <p className="mt-1 text-sm text-ink-muted">
-        Upload a CSV for private staged review. Raw file contents are never shown here.
+        Upload a CSV to add its recorded holdings and cash movements. Raw file contents are never shown here.
       </p>
       <label className="mt-4 block text-sm font-medium text-ink">
         CSV file
@@ -186,21 +187,11 @@ export function ImportReview() {
               Refresh status
             </button>
           </div>
-          {review.rows.map((row) => (
-            <div className="rounded border border-border p-3 text-sm" key={row.row_number}>
-              <strong>Row {row.row_number}</strong>
-              {row.events.map((event) => (
-                <p key={event.source_identity.event_reference}>
-                  {event.event_type}: {event.source_identity.event_reference}
-                </p>
-              ))}
-              {row.diagnostics.map((diagnostic, index) => (
-                <p className="text-red-700" key={`${diagnostic.code}-${index}`}>
-                  {diagnostic.code}: {diagnostic.message}
-                </p>
-              ))}
-            </div>
-          ))}
+          {(review.diagnostic_count > 0 || review.observed_event_count > 0) && (
+            <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              Some imported movements have unavailable accounting details. Holdings and cash flow remain source-based; affected cost-basis and return figures stay unavailable rather than estimated.
+            </p>
+          )}
           <button
             className="rounded bg-brand px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             disabled={state === "loading" || !review.confirmation_eligible}

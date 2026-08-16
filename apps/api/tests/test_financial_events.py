@@ -160,6 +160,16 @@ def test_source_reported_eur_evidence_requires_explicit_eur_facts() -> None:
             [_cash(MovementDirection.OUT)],
             "reversal_of_event_id",
         ),
+        (
+            FinancialEventType.OBSERVED_POSITION_MOVEMENT,
+            [_instrument(MovementDirection.IN)],
+            None,
+        ),
+        (
+            FinancialEventType.OBSERVED_CASH_MOVEMENT,
+            [_cash(MovementDirection.OUT)],
+            None,
+        ),
     ],
 )
 def test_each_baseline_event_type_accepts_its_normalized_movement_shape(
@@ -205,6 +215,15 @@ def test_event_and_nested_contracts_are_immutable() -> None:
         event.event_type = FinancialEventType.WITHDRAWAL
     with pytest.raises(ValidationError):
         event.legs[0].money.amount = Decimal("200.00")
+
+
+def test_event_accepts_an_opaque_nonblank_source_group_reference() -> None:
+    event = _event(source_group_reference="source-transaction-42")
+
+    assert event.source_group_reference == "source-transaction-42"
+
+    with pytest.raises(ValidationError, match="must not be blank"):
+        _event(source_group_reference="   ")
 
 
 def test_batch_rejects_duplicate_source_identity_for_owner_and_account() -> None:

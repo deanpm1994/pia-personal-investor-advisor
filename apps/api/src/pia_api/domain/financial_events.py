@@ -110,6 +110,9 @@ class SourceIdentity(FinancialContract):
         return value
 
 
+SourceGroupReference = Annotated[str, StringConstraints(strict=True, min_length=1)]
+
+
 class MovementDirection(StrEnum):
     """Direction of a factual cash or instrument movement."""
 
@@ -160,6 +163,8 @@ class FinancialEventType(StrEnum):
     STOCK_SPLIT = "stock_split"
     CORRECTION = "correction"
     REVERSAL = "reversal"
+    OBSERVED_POSITION_MOVEMENT = "observed_position_movement"
+    OBSERVED_CASH_MOVEMENT = "observed_cash_movement"
 
 
 class FinancialEvent(FinancialContract):
@@ -172,8 +177,17 @@ class FinancialEvent(FinancialContract):
     occurred_at: datetime
     legs: tuple[EventLeg, ...] = Field(min_length=1)
     source_reported_eur: SourceReportedEurEvidence | None = None
+    source_group_reference: SourceGroupReference | None = None
     correction_of_event_id: UUID | None = None
     reversal_of_event_id: UUID | None = None
+
+    @field_validator("source_group_reference")
+    @classmethod
+    def reject_blank_source_group_reference(cls, value: str | None) -> str | None:
+        """Preserve an explicit source group without accepting blank evidence."""
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value
 
     @model_validator(mode="after")
     def validate_event_shape(self) -> "FinancialEvent":
@@ -206,6 +220,10 @@ class FinancialEvent(FinancialContract):
             self._require_fx_conversion()
         elif self.event_type is FinancialEventType.STOCK_SPLIT:
             self._require_stock_split()
+        elif self.event_type is FinancialEventType.OBSERVED_POSITION_MOVEMENT:
+            self._require_single_instrument()
+        elif self.event_type is FinancialEventType.OBSERVED_CASH_MOVEMENT:
+            self._require_single_cash_any_direction()
         return self
 
     def _validate_correction_link(self) -> None:
@@ -236,6 +254,14 @@ class FinancialEvent(FinancialContract):
             raise ValueError("event requires exactly one cash leg")
         if self.legs[0].direction is not direction:
             raise ValueError("cash leg has an invalid movement direction")
+
+    def _require_single_cash_any_direction(self) -> None:
+        if len(self.legs) != 1 or not isinstance(self.legs[0], CashLeg):
+            raise ValueError("event requires exactly one cash leg")
+
+    def _require_single_instrument(self) -> None:
+        if len(self.legs) != 1 or not isinstance(self.legs[0], InstrumentLeg):
+            raise ValueError("event requires exactly one instrument leg")
 
     def _require_trade(
         self,

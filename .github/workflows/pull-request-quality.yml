@@ -29,6 +29,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check:web
 
+  web-browser-e2e:
+    name: Web browser E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6.0.9
+        with:
+          version: 10.13.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pia/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @pia/web test:e2e
+
   api:
     name: API quality
     runs-on: ubuntu-latest
@@ -77,6 +93,6 @@ jobs:
       - run: supabase migration up --local
       - run: pnpm db:migrate
       - run: pnpm check
-      - run: PIA_RUN_LOCAL_SUPABASE_TESTS=1 uv run --directory apps/api pytest tests/test_profile_rls.py
+      - run: pnpm run test:api:local-supabase
       - if: always()
         run: supabase stop --no-backup

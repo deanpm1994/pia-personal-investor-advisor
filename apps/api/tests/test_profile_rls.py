@@ -186,13 +186,91 @@ def test_profiles_are_created_synced_and_isolated(database_url: str) -> None:
 
 
 def test_profile_migration_downgrades_and_upgrades(database_url: str) -> None:
-    """Exercise the approved migration's rollback and repeatable upgrade path."""
+    """Exercise rollback, repeatable upgrades, and trustworthy group backfill."""
     from alembic import command
     from alembic.config import Config
 
+    owner_id = uuid.uuid4()
     config = Config("alembic.ini")
-    command.downgrade(config, "20260716_04")
-    command.upgrade(config, "head")
+    try:
+        command.downgrade(config, "20260716_04")
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection,
+                owner_id,
+                f"source-group-backfill-{owner_id}@example.test",
+            )
+        with psycopg.connect(database_url) as connection:
+            with connection.transaction():
+                account_id = connection.execute(
+                    """
+                    INSERT INTO public.financial_accounts (user_id)
+                    VALUES (%s)
+                    RETURNING id
+                    """,
+                    (owner_id,),
+                ).fetchone()[0]
+                for reference, event_type, direction, amount in (
+                    ("legacy-trade-1:base", "deposit", "in", "100.00"),
+                    ("legacy-trade-1:fee", "fee", "out", "1.00"),
+                    (
+                        "legacy-trade-1:withholding-tax",
+                        "withholding_tax",
+                        "out",
+                        "2.00",
+                    ),
+                    ("ambiguous:other", "deposit", "in", "3.00"),
+                ):
+                    event_id = connection.execute(
+                        """
+                        INSERT INTO public.financial_events (
+                            user_id, account_id, source_provider,
+                            source_event_reference, event_type, occurred_at
+                        )
+                        VALUES (%s, %s, 'trade-republic', %s, %s, now())
+                        RETURNING id
+                        """,
+                        (owner_id, account_id, reference, event_type),
+                    ).fetchone()[0]
+                    connection.execute(
+                        """
+                        INSERT INTO public.financial_event_legs (
+                            event_id, user_id, account_id, position, leg_kind,
+                            direction, cash_amount, cash_currency
+                        )
+                        VALUES (%s, %s, %s, 1, 'cash', %s, %s, 'EUR')
+                        """,
+                        (event_id, owner_id, account_id, direction, amount),
+                    )
+
+        command.upgrade(config, "head")
+
+        with psycopg.connect(database_url) as connection:
+            assert connection.execute(
+                """
+                SELECT source_event_reference, source_group_reference, cash_amount
+                FROM public.financial_events
+                JOIN public.financial_event_legs
+                    ON financial_event_legs.event_id = financial_events.id
+                WHERE financial_events.user_id = %s
+                ORDER BY source_event_reference
+                """,
+                (owner_id,),
+            ).fetchall() == [
+                ("ambiguous:other", None, 3),
+                ("legacy-trade-1:base", "legacy-trade-1", 100),
+                ("legacy-trade-1:fee", "legacy-trade-1", 1),
+                (
+                    "legacy-trade-1:withholding-tax",
+                    "legacy-trade-1",
+                    2,
+                ),
+            ]
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id = %s", (owner_id,)
+            )
 
 
 def test_staged_imports_are_owner_scoped_and_not_client_writable(
@@ -803,6 +881,120 @@ def test_trusted_parser_staging_can_be_confirmed(database_url: str) -> None:
                     sum(len(row.candidates) for row in batch.rows),
                     False,
                 )
+                confirmed_groups = owner_connection.execute(
+                    """
+                    SELECT source_event_reference, source_group_reference
+                    FROM public.financial_events
+                    WHERE staged_import_id = %s
+                    ORDER BY source_event_reference
+                    """,
+                    (import_id,),
+                ).fetchall()
+                assert (
+                    "synthetic-tr-buy:base",
+                    "synthetic-tr-buy",
+                ) in confirmed_groups
+                assert (
+                    "synthetic-tr-buy:fee",
+                    "synthetic-tr-buy",
+                ) in confirmed_groups
+                assert (
+                    "synthetic-tr-dividend:base",
+                    "synthetic-tr-dividend",
+                ) in confirmed_groups
+                assert (
+                    "synthetic-tr-dividend:withholding-tax",
+                    "synthetic-tr-dividend",
+                ) in confirmed_groups
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id = %s", (owner_id,)
+            )
+
+
+def test_trusted_observed_movements_can_be_confirmed(database_url: str) -> None:
+    """Observed cash and position facts must survive the production RPC path."""
+    owner_id = uuid.uuid4()
+    source = (
+        Path(__file__).parent
+        / "fixtures/trade_republic_csv_v1/malformed/unsupported-observed-types.csv"
+    ).read_text(encoding="utf-8")
+    content = "\n".join(
+        line for line in source.splitlines() if ",DELIVERY," not in line
+    ).encode()
+    batch = parse_trade_republic_csv(content)
+    import_id = str(uuid.uuid4())
+
+    assert batch.confirmation_eligible is True
+
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection,
+                owner_id,
+                f"observed-confirm-{owner_id}@example.test",
+            )
+
+        asyncio.run(
+            TrustedStagedImportWriter(Settings()).stage(
+                user_id=str(owner_id),
+                import_id=import_id,
+                path=f"{owner_id}/imports/{import_id}.csv",
+                filename="synthetic-observed.csv",
+                content_type="text/csv",
+                content=content,
+                batch=batch,
+            )
+        )
+
+        with psycopg.connect(database_url) as owner_connection:
+            with owner_connection.transaction():
+                _as_authenticated_user(owner_connection, owner_id)
+                assert owner_connection.execute(
+                    "SELECT * FROM public.confirm_staged_import(%s)", (import_id,)
+                ).fetchone() == (4, False)
+                assert owner_connection.execute(
+                    """
+                    SELECT name, role
+                    FROM public.financial_accounts
+                    WHERE user_id = %s
+                    """,
+                    (owner_id,),
+                ).fetchall() == [("Brokerage account", "brokerage")]
+                assert owner_connection.execute(
+                    """
+                    SELECT event_type, count(*)
+                    FROM public.financial_events
+                    WHERE staged_import_id = %s
+                    GROUP BY event_type
+                    ORDER BY event_type
+                    """,
+                    (import_id,),
+                ).fetchall() == [
+                    ("observed_cash_movement", 1),
+                    ("observed_position_movement", 3),
+                ]
+        from alembic import command
+        from alembic.config import Config
+
+        config = Config("alembic.ini")
+        command.downgrade(config, "20260807_10")
+        with psycopg.connect(database_url) as connection:
+            assert connection.execute(
+                """
+                SELECT event_type, count(*)
+                FROM public.financial_events
+                WHERE staged_import_id = %s
+                GROUP BY event_type
+                ORDER BY event_type
+                """,
+                (import_id,),
+            ).fetchall() == [
+                ("observed_cash_movement", 1),
+                ("observed_position_movement", 3),
+            ]
+        command.upgrade(config, "head")
     finally:
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
             admin_connection.execute(
@@ -934,6 +1126,99 @@ def test_confirmation_rejects_fabricated_review_ready_import_without_provenance(
         with psycopg.connect(database_url, autocommit=True) as admin_connection:
             admin_connection.execute(
                 "DELETE FROM auth.users WHERE id = %s", (owner_id,)
+            )
+
+
+def test_source_groups_are_owner_scoped_and_immutable(database_url: str) -> None:
+    """Group evidence cannot be read or written across an ownership boundary."""
+    owner_id, other_user_id = uuid.uuid4(), uuid.uuid4()
+    try:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            _insert_auth_user(
+                admin_connection, owner_id, f"group-owner-{owner_id}@example.test"
+            )
+            _insert_auth_user(
+                admin_connection,
+                other_user_id,
+                f"group-other-{other_user_id}@example.test",
+            )
+        with psycopg.connect(database_url) as admin_connection:
+            with admin_connection.transaction():
+                owner_account_id = admin_connection.execute(
+                    """
+                    INSERT INTO public.financial_accounts (user_id)
+                    VALUES (%s)
+                    RETURNING id
+                    """,
+                    (owner_id,),
+                ).fetchone()[0]
+
+        with psycopg.connect(database_url) as owner_connection:
+            with owner_connection.transaction():
+                _as_authenticated_user(owner_connection, owner_id)
+                event_id = owner_connection.execute(
+                    """
+                    INSERT INTO public.financial_events (
+                        user_id, account_id, source_provider,
+                        source_event_reference, source_group_reference,
+                        event_type, occurred_at
+                    )
+                    VALUES (%s, %s, 'fixture', 'grouped-deposit', 'group-1',
+                            'deposit', now())
+                    RETURNING id
+                    """,
+                    (owner_id, owner_account_id),
+                ).fetchone()[0]
+                owner_connection.execute(
+                    """
+                    INSERT INTO public.financial_event_legs (
+                        event_id, user_id, account_id, position, leg_kind,
+                        direction, cash_amount, cash_currency
+                    )
+                    VALUES (%s, %s, %s, 1, 'cash', 'in', 1, 'EUR')
+                    """,
+                    (event_id, owner_id, owner_account_id),
+                )
+                assert owner_connection.execute(
+                    """
+                    SELECT account_id, source_provider, source_group_reference
+                    FROM public.financial_source_event_groups
+                    """
+                ).fetchall() == [(owner_account_id, "fixture", "group-1")]
+
+        with psycopg.connect(database_url) as anonymous_connection:
+            with anonymous_connection.transaction():
+                anonymous_connection.execute("SET LOCAL ROLE anon")
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    anonymous_connection.execute(
+                        "SELECT * FROM public.financial_source_event_groups"
+                    ).fetchall()
+
+        with psycopg.connect(database_url) as other_connection:
+            with other_connection.transaction():
+                _as_authenticated_user(other_connection, other_user_id)
+                assert (
+                    other_connection.execute(
+                        "SELECT * FROM public.financial_source_event_groups"
+                    ).fetchall()
+                    == []
+                )
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    other_connection.execute(
+                        """
+                        INSERT INTO public.financial_source_event_groups (
+                            user_id, account_id, source_provider,
+                            source_group_reference
+                        )
+                        VALUES (%s, %s, 'fixture', 'group-1')
+                        """,
+                        (owner_id, owner_account_id),
+                    )
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin_connection:
+            admin_connection.execute(
+                "DELETE FROM auth.users WHERE id IN (%s, %s)",
+                (owner_id, other_user_id),
             )
 
 
@@ -1348,7 +1633,7 @@ def test_synthetic_financial_fixture_history_persists_without_reinterpretation(
                     (FIXTURE_HISTORY[-2].event_id, FIXTURE_HISTORY[-1].event_id),
                 ).fetchall() == [
                     (FIXTURE_HISTORY[0].event_id, None),
-                    (None, FIXTURE_HISTORY[0].event_id),
+                    (None, FIXTURE_HISTORY[-2].event_id),
                 ]
                 assert connection.execute(
                     """

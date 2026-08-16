@@ -30,8 +30,12 @@ from pia_api.domain.financial_events import (
 
 
 def test_fixture_history_covers_the_canonical_event_vocabulary() -> None:
-    assert {fixture.event.event_type for fixture in FIXTURE_HISTORY} == set(
-        FinancialEventType
+    assert {fixture.event.event_type for fixture in FIXTURE_HISTORY} == (
+        set(FinancialEventType)
+        - {
+            FinancialEventType.OBSERVED_POSITION_MOVEMENT,
+            FinancialEventType.OBSERVED_CASH_MOVEMENT,
+        }
     )
 
 
@@ -102,7 +106,7 @@ def test_corrections_and_reversals_preserve_original_fixture_history() -> None:
     original_amount = DEPOSIT.event.legs[0].money.amount
 
     assert CORRECTION.event.correction_of_event_id == DEPOSIT.event_id
-    assert REVERSAL.event.reversal_of_event_id == DEPOSIT.event_id
+    assert REVERSAL.event.reversal_of_event_id == CORRECTION.event_id
     assert DEPOSIT.event.legs[0].money.amount == original_amount
     with pytest.raises(ValidationError):
         DEPOSIT.event.legs[0].money.amount = Decimal("1")

@@ -16,18 +16,19 @@ const foundations = [
 ];
 
 import { AuthPanel } from "@/components/auth-panel";
+import { FinancialDashboard } from "@/components/financial-dashboard";
 import { ImportReview } from "@/components/import-review";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-canvas">
       <header className="border-b border-border bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:flex-nowrap sm:px-8">
           <a className="text-lg font-semibold tracking-tight text-ink" href="#overview">
             PIA
           </a>
-          <div className="flex items-center gap-3">
-            <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold tracking-wide text-brand">
+          <div className="flex w-full min-w-0 flex-none flex-wrap items-center justify-end gap-3 sm:w-auto sm:flex-none sm:flex-nowrap">
+            <span className="hidden rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold tracking-wide text-brand sm:inline-flex">
               Foundation
             </span>
             <AuthPanel />
@@ -54,16 +55,7 @@ export default function Home() {
         </nav>
 
         <main className="min-w-0 flex-1" id="overview">
-          <section className="rounded-panel border border-border bg-surface p-6 shadow-panel sm:p-10">
-            <p className="text-sm font-semibold tracking-wide text-brand">PERSONAL INVESTOR ADVISOR</p>
-            <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-ink sm:text-5xl">
-              Your financial cockpit is taking shape
-            </h1>
-            <p className="mt-4 max-w-xl text-base leading-7 text-ink-muted sm:text-lg">
-              This private workspace is ready for its foundations. Future approved phases will add your data,
-              evidence, and decision support—never automatic trading.
-            </p>
-          </section>
+          <FinancialDashboard />
           <ImportReview />
 
           <section aria-labelledby="foundation-heading" className="mt-6 sm:mt-8">
@@ -71,7 +63,7 @@ export default function Home() {
               <h2 className="text-xl font-semibold text-ink" id="foundation-heading">
                 What&apos;s ahead
               </h2>
-              <span className="text-sm text-ink-muted">Static preview</span>
+              <span className="text-sm text-ink-muted">Planned next steps</span>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               {foundations.map((foundation) => (

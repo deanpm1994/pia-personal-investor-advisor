@@ -25,6 +25,7 @@ class Gateway:
             "row_count": 1,
             "event_count": 1,
             "diagnostic_count": 0,
+            "observed_event_count": 0,
             "confirmation_eligible": True,
             "rows": [],
         }
@@ -38,6 +39,7 @@ class Gateway:
             "row_count": 1,
             "event_count": 0,
             "diagnostic_count": 1,
+            "observed_event_count": 0,
             "confirmation_eligible": False,
             "diagnostics": [
                 {
@@ -65,6 +67,7 @@ class Gateway:
             "row_count": 1,
             "event_count": 1,
             "diagnostic_count": 0,
+            "observed_event_count": 0,
             "confirmation_eligible": False,
             "rows": [],
         }
@@ -319,6 +322,7 @@ def test_gateway_stages_invalid_encoding_as_a_safe_blocked_review(monkeypatch) -
         "row_count": 0,
         "event_count": 0,
         "diagnostic_count": 1,
+        "observed_event_count": 0,
         "confirmation_eligible": False,
         "diagnostics": [
             {
