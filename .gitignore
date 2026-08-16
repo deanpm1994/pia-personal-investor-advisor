@@ -8,6 +8,8 @@ node_modules/
 .next/
 out/
 coverage/
+playwright-report/
+test-results/
 
 # Python
 __pycache__/
