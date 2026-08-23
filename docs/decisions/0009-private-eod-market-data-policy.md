@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted on 2026-08-23 for the private, single-user PIA deployment described by
-`PROJECT_BIBLE.md`.
+Proposed on 2026-08-23 for the private, single-user PIA deployment described by
+`PROJECT_BIBLE.md`. Provider enablement is blocked pending the written
+Marketstack confirmation described in
+[Open licensing gate](#open-licensing-gate).
 
 This decision does not approve commercial use, public display, redistribution,
 real-time data, a paid plan, or a mandatory provider credential. Any of those
@@ -28,25 +30,26 @@ rather than permanent facts.
 
 ## Decision
 
-Use two replaceable adapters:
+Subject to the open licensing gate, use two replaceable adapters:
 
 - **OpenFIGI** resolves a validated ISIN to open FIGI metadata and candidate
   listing identities. The unauthenticated API is the default, so no OpenFIGI
   secret is required.
 - **Marketstack** supplies raw daily EOD OHLCV bars for an explicitly resolved
-  listing. The free plan is the only approved Marketstack tier. Its access key
-  is optional runtime configuration supplied by the owner and must never be
-  committed, logged, sent to the browser, or embedded in a stored source URL.
+  listing. The free plan is the only candidate Marketstack tier. Its access
+  key is optional runtime configuration supplied by the owner and must never
+  be committed, logged, sent to the browser, or embedded in a stored source
+  URL.
 
 The Marketstack adapter is disabled by default. PIA remains useful when it is
 disabled: financial accounting, imports, savings, reserves, and existing
 snapshots continue to work; market analysis is visibly unavailable.
 
-The approved use is personal, private, non-commercial use by the single owner.
-The owner may view the data and derived charts only after accepting the current
-provider terms and configuring their own free key. Public hosting, access by a
-second user, client work, business use, redistribution, or monetization is not
-covered by this decision.
+The intended use is personal, private, non-commercial use by the single owner.
+The owner may view the data and derived charts only after the open licensing
+gate is satisfied, accepting the current provider terms, and configuring their
+own free key. Public hosting, access by a second user, client work, business
+use, redistribution, or monetization is not covered by this decision.
 
 ## Licensing and coverage disposition
 
@@ -68,8 +71,8 @@ not an approved price mapping.
 
 ### Marketstack
 
-Marketstack is approved only for the private EOD use described above because
-its current free plan provides:
+Marketstack is the preferred price-data candidate for the private EOD use
+described above because its current free plan provides:
 
 - 100 requests per month;
 - EOD data and up to one year of history;
@@ -83,10 +86,12 @@ most continuously listed instruments. PIA must still report insufficient
 history when the actual response contains fewer than an indicator requires.
 
 The free plan does not grant commercial-use rights. The official service
-agreement reviewed for this decision does not add an attribution requirement
-or a provider-data deletion deadline. PIA nevertheless shows source
-attribution, limits retention, and rechecks the terms because upstream data
-licenses and plans can change.
+agreement reviewed for this decision does not explicitly grant persistent
+local storage or owner-only chart-display rights. Its termination clause also
+ends all licenses and prohibits further use of Content. Absence of a more
+specific prohibition is not sufficient evidence of permission under the PIA
+licensing guardrail, so the Marketstack adapter remains disabled until the
+provider confirms the intended use in writing.
 
 No reviewed Marketstack source promises an exact EOD publication time or a
 free-plan service-level agreement. The 06:00 UTC schedule below is a
@@ -108,7 +113,7 @@ Phase 6 supports an instrument only when all of the following are true:
 4. Marketstack reports an explicit three-letter quote currency.
 5. Marketstack returns structurally valid daily OHLCV data for that exact
    provider symbol.
-6. The instrument fits within the 20-active-instrument policy cap.
+6. The instrument fits within the three-active-instrument free-tier cap.
 
 Common stocks and exchange-traded funds are in scope. Mutual funds, bonds,
 indices, options, futures, CFDs, cryptocurrencies, forex, OTC-only securities,
@@ -222,17 +227,25 @@ loads, browser requests, and user navigation never call either provider.
 Sunday and Monday runs make no routine EOD request; they may perform only a
 budgeted retry or correction check.
 
+Marketstack counts each ticker lookup as one request even when several symbols
+are sent in one HTTP request. A five-symbol batch therefore consumes five of
+the monthly requests; batching reduces network round trips, not quota usage.
+
 The free Marketstack budget is allocated conservatively:
 
-- at most 31 scheduled multi-symbol EOD requests per calendar month;
-- at most 20 one-time history bootstrap requests for active instruments; and
-- at least 49 requests reserved for retry, correction checks, onboarding, and
-  month-length variation.
+- at most 23 weekday runs times three active instruments, or 69 billable
+  ticker requests per calendar month;
+- at most three one-time history bootstrap requests, one per active
+  instrument; and
+- at least 28 requests reserved for reference checks, retry, correction, and
+  replacement onboarding.
 
-The scheduler maintains its own monthly request ledger because absence of a
-provider warning is not permission to exceed the plan. It stops before the
-100-request limit. It never purchases overages or changes plan automatically.
-The active-instrument cap cannot be raised without a quota and product review.
+The scheduler maintains its own monthly ticker-request ledger because absence
+of a provider warning is not permission to exceed the plan. It stops before
+the 100-request limit. It never purchases overages or changes plan
+automatically. A replacement instrument must reuse the reserved budget and
+does not increase the active cap. The cap cannot be raised without a quota and
+product review.
 
 OpenFIGI requests use the unauthenticated limit: no more than 10 jobs in a
 request and no more than 25 requests per minute. A `429` response always honors
@@ -290,11 +303,13 @@ the listing pending a new mapping decision.
 
 ## Retention and provider disablement
 
-Normalized Marketstack bars and their audit revisions are retained for 400
-calendar days while the owner's provider account and terms remain active. This
-supports the one-year free-plan boundary and SMA-200 without building an
-indefinite licensed-data archive. Ingestion-run metadata, hashes, diagnostics,
-and non-price mapping provenance may be retained longer for auditability.
+If the licensing gate is satisfied, normalized Marketstack bars and their audit
+revisions may be retained for no more than 400 calendar days while the owner's
+provider account and license remain active. This supports the one-year
+free-plan boundary and SMA-200 without building an indefinite licensed-data
+archive. Ingestion-run metadata, hashes, diagnostics, and non-price mapping
+provenance may be retained longer for auditability only when it cannot recreate
+provider Content.
 
 Raw provider payloads are processed transiently and discarded after
 normalization and hashing. Backups follow the same retention deadline.
@@ -306,13 +321,34 @@ removed, the quota changes incompatibly, or the provider is disabled:
 1. stop all provider calls;
 2. mark analysis `provider_disabled` or `license_review_required`;
 3. preserve accounting and non-market features;
-4. hide expired provider data from charts rather than imply freshness; and
-5. delete or retain stored data according to the newly applicable terms, using
-   a separately reviewed deletion operation.
+4. immediately deny UI and API use of provider Content;
+5. remove provider Content from active storage within 24 hours; and
+6. purge inaccessible backup copies within 30 days through a separately
+   reviewed deletion operation.
 
 No provider may be enabled merely because an environment variable exists. The
 application requires an explicit provider-enabled setting plus a valid
 server-side key.
+
+## Open licensing gate
+
+Before this ADR can become `Accepted`, written Marketstack documentation or a
+provider response must confirm all of the following for the Free plan:
+
+1. a non-professional subscriber may persist normalized daily OHLCV data in a
+   private database for up to 400 days;
+2. the same subscriber may view those prices and derived indicators in an
+   authenticated, owner-only chart;
+3. correction revisions, response hashes, and non-reconstructable derived
+   indicators may be retained as described here;
+4. any required Marketstack or upstream attribution text and placement;
+5. required handling and deletion timing when the account or plan ends; and
+6. whether any exchange, country, or instrument coverage has narrower rights.
+
+The confirmation must be linked from issue #92 without including an API key,
+account identifier, private financial data, or portfolio holdings. Until it is
+recorded, no Marketstack credential is required or accepted, no provider bars
+are persisted, and Phase 6 provider implementation remains blocked.
 
 ## Security and privacy
 
@@ -347,11 +383,12 @@ server-side key.
 
 ## Consequences
 
-PIA gets a zero-required-cost path for a deliberately small private universe,
-with enough initial history for SMA-200 and an open ISIN mapping layer. The
-trade-off is a strict quota, a provider credential supplied by the owner, a
-400-day retention window, no commercial/public use, and explicit unavailable
-states whenever coverage or licensing is uncertain.
+If the licensing gate is satisfied, PIA gets a zero-required-cost path for a
+deliberately small three-instrument private universe, with enough initial
+history for SMA-200 and an open ISIN mapping layer. The trade-off is a strict
+quota, a provider credential supplied by the owner, a 400-day retention
+window, no commercial/public use, and explicit unavailable states whenever
+coverage or licensing is uncertain.
 
 Future replacement is localized to adapters, mapping records, ingestion
 configuration, and contract tests. A replacement still needs a new approved
@@ -368,7 +405,10 @@ Official sources reviewed on 2026-08-23:
   plan, global exchange/ticker coverage, currency/timezone coverage, and paid
   commercial-use rights.
 - [Marketstack service agreement](https://marketstack.com/agreement) — service,
-  subscription, customer, availability, and termination terms.
+  subscription, customer, availability, license termination, and post-contract
+  Content-use terms.
+- [Marketstack FAQ](https://marketstack.com/faq) — per-ticker request
+  accounting, including multi-symbol requests.
 - [Marketstack EOD example](https://marketstack.com/find-ticker-symbol) — EOD
   request shape, multi-symbol parameter, OHLCV, adjusted fields, exchange MIC,
   and timestamp response fields.
