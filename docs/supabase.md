@@ -107,17 +107,29 @@ server-only database connection. The database enforces
 `staged → parsed → validated → blocked`; confirmation additionally requires
 server-written provenance, so a client cannot manufacture a review-ready batch.
 
-To run the approved Phase 5 local-Supabase integration suite after starting the
-stack and applying migrations, run from the repository root:
+P6.2 adds a separate owner-scoped market-data store for approved instruments,
+versioned provider mappings, ingestion-run evidence, immutable daily EOD bar
+revisions, and replay provenance. It does not join market observations into the
+financial ledger or snapshots. Authenticated clients can read only their own
+metadata, and can read provider Content only while the server-controlled access
+record is enabled, its licensing review is current, and the bar remains inside
+its retention deadline. Clients have no write access. The trusted Python
+gateway rejects disabled providers, reuses identical observations, appends
+changed OHLCV values as correction revisions, and retains only normalized
+Decimal-backed values plus non-secret provenance and response hashes.
+
+To run the approved local-Supabase integration suite after starting the stack
+and applying migrations, run from the repository root:
 
 ```sh
 pnpm run test:api:local-supabase
 ```
 
-The command deliberately enumerates the owner/RLS, manual-account, and
-immutable-snapshot suites. This keeps the financial and security boundary
-explicit while ensuring every test requires the `PIA_RUN_LOCAL_SUPABASE_TESTS`
-opt-in and uses only ephemeral local-Supabase data.
+The command deliberately enumerates the owner/RLS, manual-account,
+immutable-snapshot, and private market-data suites. This keeps the financial
+and security boundary explicit while ensuring every test requires the
+`PIA_RUN_LOCAL_SUPABASE_TESTS` opt-in and uses only ephemeral local-Supabase
+data.
 
 ## Pull-request security integration
 
