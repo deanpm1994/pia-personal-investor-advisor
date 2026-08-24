@@ -7,6 +7,7 @@ portfolio accounting.
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -78,6 +79,16 @@ def _validate_isin(value: str) -> str:
     if total % 10:
         raise ValueError("ISIN check digit is invalid")
     return value
+
+
+def validate_isin(value: object) -> str:
+    """Validate a raw owner-supplied ISIN without calling a provider."""
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}[0-9]", value) is None
+    ):
+        raise ValueError("ISIN must use the ISO 6166 format")
+    return _validate_isin(value)
 
 
 def _validate_source_url(value: str) -> str:
@@ -167,7 +178,7 @@ class InstrumentIdentity(MarketDataContract):
     @field_validator("isin")
     @classmethod
     def validate_isin(cls, value: str) -> str:
-        return _validate_isin(value)
+        return validate_isin(value)
 
 
 class ListingIdentity(MarketDataContract):
@@ -218,8 +229,16 @@ class ProviderMapping(MarketDataContract):
 
 class ResolutionCandidate(MarketDataContract):
     instrument: InstrumentIdentity
+    display_name: Annotated[str, StringConstraints(strict=True, min_length=1)]
     listing: ListingIdentity
     mapping: ProviderMapping
+
+    @field_validator("display_name")
+    @classmethod
+    def reject_blank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("display_name must not be blank")
+        return value
 
     @model_validator(mode="after")
     def require_consistent_listing(self) -> ResolutionCandidate:
@@ -230,6 +249,13 @@ class ResolutionCandidate(MarketDataContract):
             or self.listing.quote_currency != self.mapping.quote_currency
         ):
             raise ValueError("candidate mapping contradicts its listing identity")
+        if (
+            self.mapping.resolution_status is not ResolutionStatus.SUPPORTED
+            or self.mapping.valid_to is not None
+        ):
+            raise ValueError(
+                "resolution candidate requires an active supported mapping"
+            )
         return self
 
 
@@ -251,7 +277,7 @@ class ResolutionOutcome(MarketDataContract):
     @field_validator("requested_isin")
     @classmethod
     def validate_isin(cls, value: str) -> str:
-        return _validate_isin(value)
+        return validate_isin(value)
 
     @field_validator("retrieved_at")
     @classmethod

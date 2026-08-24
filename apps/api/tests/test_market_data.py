@@ -123,6 +123,7 @@ def test_resolution_contract_preserves_identity_mapping_and_evidence() -> None:
         candidates=(
             ResolutionCandidate(
                 instrument=identity,
+                display_name="Synthetic Equity",
                 listing=listing,
                 mapping=_mapping(),
             ),
