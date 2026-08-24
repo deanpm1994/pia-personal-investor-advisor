@@ -19,7 +19,7 @@
     "lint:api": "uv run --directory apps/api ruff check .",
     "format:api": "uv run --directory apps/api ruff format --check .",
     "test:api": "uv run --directory apps/api pytest",
-    "test:api:local-supabase": "PIA_RUN_LOCAL_SUPABASE_TESTS=1 uv run --directory apps/api pytest tests/test_profile_rls.py tests/test_manual_account_gateway.py tests/test_snapshot_persistence_rls.py",
+    "test:api:local-supabase": "PIA_RUN_LOCAL_SUPABASE_TESTS=1 uv run --directory apps/api pytest tests/test_profile_rls.py tests/test_manual_account_gateway.py tests/test_snapshot_persistence_rls.py tests/test_market_data_persistence_rls.py",
     "check:api": "pnpm run lint:api && pnpm run format:api && pnpm run test:api",
     "db:migrate": "uv run --directory apps/api alembic upgrade head"
   }
