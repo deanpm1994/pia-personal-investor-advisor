@@ -3,7 +3,7 @@
 import asyncio
 import os
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 import pytest
@@ -64,8 +64,9 @@ def _as_authenticated_user(connection, user_id: uuid.UUID) -> None:
 def _seed_market_data(
     connection, user_id: uuid.UUID
 ) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
-    market_date = date.today() - timedelta(days=1)
-    retain_until = date.today() + timedelta(days=30)
+    today_utc = datetime.now(UTC).date()
+    market_date = today_utc - timedelta(days=1)
+    retain_until = today_utc + timedelta(days=30)
     instrument_id = connection.execute(
         """
         INSERT INTO public.market_instruments (
@@ -323,7 +324,7 @@ def _fetch_contracts(
     close: str = "11.00",
     response_sha256: str = "d" * 64,
 ) -> tuple[ProviderMapping, FetchOutcome]:
-    market_date = date.today() - timedelta(days=1)
+    market_date = datetime.now(UTC).date() - timedelta(days=1)
     retrieved_at = datetime.now(UTC)
     mapping = ProviderMapping(
         instrument_id=instrument_id,
