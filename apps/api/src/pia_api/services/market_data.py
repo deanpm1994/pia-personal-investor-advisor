@@ -20,6 +20,7 @@ from pia_api.domain.market_data import (
     DailyBar,
     FetchAssessment,
     FetchOutcome,
+    FetchStatus,
     ProviderMapping,
 )
 
@@ -173,6 +174,15 @@ class TrustedMarketDataGateway:
             WHERE user_id = %s AND provider = %s
                 AND access_status = 'enabled'
                 AND license_review_due_at > now()
+                AND (
+                    provider <> 'marketstack'
+                    OR (
+                        risk_attestation_version = 'adr-0009-founder-risk-v1'
+                        AND risk_attested_at IS NOT NULL
+                        AND risk_attested_at <= now()
+                        AND risk_withdrawn_at IS NULL
+                    )
+                )
             """,
             (user_id, provider),
         ).fetchone()
@@ -189,13 +199,21 @@ class TrustedMarketDataGateway:
         assessment: FetchAssessment,
         fingerprint: str,
     ) -> None:
-        status = (
-            "failed"
-            if not assessment.accepted_bars
-            else "partial"
-            if assessment.completeness_status is CompletenessStatus.INCOMPLETE
-            else "completed"
-        )
+        if outcome.status in {
+            FetchStatus.PROVIDER_DISABLED,
+            FetchStatus.LICENSE_REVIEW_REQUIRED,
+            FetchStatus.QUOTA_EXHAUSTED,
+        }:
+            status = outcome.status.value
+        elif not assessment.accepted_bars:
+            status = FetchStatus.FAILED.value
+        elif (
+            outcome.status is FetchStatus.PARTIAL
+            or assessment.completeness_status is CompletenessStatus.INCOMPLETE
+        ):
+            status = FetchStatus.PARTIAL.value
+        else:
+            status = FetchStatus.COMPLETED.value
         inserted = connection.execute(
             """
             INSERT INTO public.market_ingestion_runs (

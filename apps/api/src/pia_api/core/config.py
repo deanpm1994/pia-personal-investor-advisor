@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "test", "production"]
@@ -20,6 +21,9 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_jwt_audience: str = "authenticated"
     web_origin: str = "http://localhost:3000"
+    marketstack_enabled: bool = False
+    marketstack_access_key: SecretStr | None = None
+    market_eod_owner_id: str = ""
 
     @property
     def supabase_jwks_url(self) -> str:
