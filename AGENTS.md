@@ -19,7 +19,8 @@ Before changing the repository, read PROJECT_BIBLE.md and the assigned GitHub Is
 - an external credential or paid plan is required;
 - a data migration can reinterpret or remove financial history;
 - calculations disagree with fixtures;
-- data licensing is unclear;
+- data licensing is unclear and no Accepted ADR records explicit founder-approved
+  risk assumptions and mandatory safeguards;
 - an AI response cannot be grounded in evidence.
 
 ## Never
