@@ -72,7 +72,10 @@ For one approved issue only:
 7. Post verification evidence on the issue and move it to Review.
 8. Stop. Do not begin the next issue without approval.
 
-Stop immediately if the work needs a new product decision, paid provider, secret, unclear license, risky migration, failing financial fixture, or unsupported AI claim.
+Stop immediately if the work needs a new product decision, paid provider,
+secret, risky migration, failing financial fixture, unsupported AI claim, or
+unclear provider rights without an Accepted ADR that records explicit
+founder-approved risk assumptions and mandatory safeguards.
 
 ## Review loops
 

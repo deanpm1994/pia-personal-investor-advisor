@@ -2,10 +2,14 @@
 
 ## Status
 
-Proposed on 2026-08-23 for the private, single-user PIA deployment described by
-`PROJECT_BIBLE.md`. Provider enablement is blocked pending the written
-Marketstack confirmation described in
-[Open licensing gate](#open-licensing-gate).
+Accepted on 2026-08-25 for the private, single-user PIA deployment described by
+`PROJECT_BIBLE.md`. The founder explicitly accepts the documented ambiguity in
+Marketstack's published Free-plan terms for the narrow private use below,
+subject to the [founder-risk and runtime gate](#founder-risk-and-runtime-gate).
+
+This acceptance is a product-risk decision, not written provider confirmation
+or legal advice. It does not represent that Marketstack or an upstream exchange
+has expressly granted storage or display rights.
 
 This decision does not approve commercial use, public display, redistribution,
 real-time data, a paid plan, or a mandatory provider credential. Any of those
@@ -30,7 +34,7 @@ rather than permanent facts.
 
 ## Decision
 
-Subject to the open licensing gate, use two replaceable adapters:
+Subject to the founder-risk and runtime gate, use two replaceable adapters:
 
 - **OpenFIGI** resolves a validated ISIN to open FIGI metadata and candidate
   listing identities. The unauthenticated API is the default, so no OpenFIGI
@@ -46,10 +50,11 @@ disabled: financial accounting, imports, savings, reserves, and existing
 snapshots continue to work; market analysis is visibly unavailable.
 
 The intended use is personal, private, non-commercial use by the single owner.
-The owner may view the data and derived charts only after the open licensing
-gate is satisfied, accepting the current provider terms, and configuring their
-own free key. Public hosting, access by a second user, client work, business
-use, redistribution, or monetization is not covered by this decision.
+The owner may view the data and derived charts only after explicitly attesting
+to the current founder-risk policy, completing a current licensing review, and
+configuring their own free key. Public hosting, access by a second user, client
+work, business use, redistribution, or monetization is not covered by this
+decision.
 
 ## Licensing and coverage disposition
 
@@ -88,10 +93,10 @@ history when the actual response contains fewer than an indicator requires.
 The free plan does not grant commercial-use rights. The official service
 agreement reviewed for this decision does not explicitly grant persistent
 local storage or owner-only chart-display rights. Its termination clause also
-ends all licenses and prohibits further use of Content. Absence of a more
-specific prohibition is not sufficient evidence of permission under the PIA
-licensing guardrail, so the Marketstack adapter remains disabled until the
-provider confirms the intended use in writing.
+ends all licenses and prohibits further use of Content. The founder knowingly
+accepts that ambiguity for this private, non-commercial, single-owner use only;
+the runtime gate below remains mandatory and the adapter remains disabled by
+default.
 
 No reviewed Marketstack source promises an exact EOD publication time or a
 free-plan service-level agreement. The 06:00 UTC schedule below is a
@@ -303,13 +308,13 @@ the listing pending a new mapping decision.
 
 ## Retention and provider disablement
 
-If the licensing gate is satisfied, normalized Marketstack bars and their audit
-revisions may be retained for no more than 400 calendar days while the owner's
-provider account and license remain active. This supports the one-year
-free-plan boundary and SMA-200 without building an indefinite licensed-data
-archive. Ingestion-run metadata, hashes, diagnostics, and non-price mapping
-provenance may be retained longer for auditability only when it cannot recreate
-provider Content.
+If the founder-risk and runtime gate is satisfied, normalized Marketstack bars
+and their audit revisions may be retained for no more than 400 calendar days
+while the owner's provider account and license remain active. This supports the
+one-year free-plan boundary and SMA-200 without building an indefinite
+licensed-data archive. Ingestion-run metadata, hashes, diagnostics, and
+non-price mapping provenance may be retained longer for auditability only when
+it cannot recreate provider Content.
 
 Raw provider payloads are processed transiently and discarded after
 normalization and hashing. Backups follow the same retention deadline.
@@ -330,25 +335,28 @@ No provider may be enabled merely because an environment variable exists. The
 application requires an explicit provider-enabled setting plus a valid
 server-side key.
 
-## Open licensing gate
+## Founder-risk and runtime gate
 
-Before this ADR can become `Accepted`, written Marketstack documentation or a
-provider response must confirm all of the following for the Free plan:
+Issue #108 records the founder's explicit decision to proceed without written
+Marketstack confirmation. Before the adapter can be enabled for an owner, the
+server must persist a versioned attestation that the owner:
 
-1. a non-professional subscriber may persist normalized daily OHLCV data in a
-   private database for up to 400 days;
-2. the same subscriber may view those prices and derived indicators in an
-   authenticated, owner-only chart;
-3. correction revisions, response hashes, and non-reconstructable derived
-   indicators may be retained as described here;
-4. any required Marketstack or upstream attribution text and placement;
-5. required handling and deletion timing when the account or plan ends; and
-6. whether any exchange, country, or instrument coverage has narrower rights.
+1. understands that the reviewed Free-plan documents do not expressly grant
+   persistent private storage or owner-only chart display;
+2. confirms the application is private, authenticated, single-user,
+   non-commercial, and has no redistribution or public-display path;
+3. accepts the 100-request monthly ceiling, three-active-instrument cap,
+   400-day maximum retention, source attribution, and 90-day review cycle;
+4. will immediately disable access and remove active Content within 24 hours
+   if the account, plan, or permitted use ends or becomes incompatible; and
+5. accepts that narrower exchange or upstream rights disable affected Content
+   until separately reviewed.
 
-The confirmation must be linked from issue #92 without including an API key,
-account identifier, private financial data, or portfolio holdings. Until it is
-recorded, no Marketstack credential is required or accepted, no provider bars
-are persisted, and Phase 6 provider implementation remains blocked.
+The attestation version, acceptance timestamp, current licensing-review
+timestamp, and next review deadline are server-controlled owner metadata. A
+credential or environment variable alone cannot satisfy this gate. Missing,
+expired, or withdrawn attestation produces `provider_disabled` or
+`license_review_required`, performs no provider call, and denies Content use.
 
 ## Security and privacy
 
@@ -383,12 +391,12 @@ are persisted, and Phase 6 provider implementation remains blocked.
 
 ## Consequences
 
-If the licensing gate is satisfied, PIA gets a zero-required-cost path for a
-deliberately small three-instrument private universe, with enough initial
-history for SMA-200 and an open ISIN mapping layer. The trade-off is a strict
-quota, a provider credential supplied by the owner, a 400-day retention
-window, no commercial/public use, and explicit unavailable states whenever
-coverage or licensing is uncertain.
+PIA gets a zero-required-cost path for a deliberately small three-instrument
+private universe, with enough initial history for SMA-200 and an open ISIN
+mapping layer. The trade-off is founder acceptance of unresolved contractual
+ambiguity, a strict quota, a provider credential supplied by the owner, a
+400-day retention window, no commercial/public use, and explicit unavailable
+states whenever coverage or licensing is uncertain.
 
 Future replacement is localized to adapters, mapping records, ingestion
 configuration, and contract tests. A replacement still needs a new approved
@@ -396,7 +404,8 @@ licensing decision; interface compatibility alone is insufficient.
 
 ## Evidence register
 
-Official sources reviewed on 2026-08-23:
+Official sources reviewed on 2026-08-23 and re-reviewed on 2026-08-25 for the
+founder-risk decision:
 
 - [Marketstack pricing](https://marketstack.com/pricing) — free-plan EOD,
   one-year history, request allowance, reference data, and commercial-use
