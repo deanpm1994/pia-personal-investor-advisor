@@ -118,6 +118,16 @@ gateway rejects disabled providers, reuses identical observations, appends
 changed OHLCV values as correction revisions, and retains only normalized
 Decimal-backed values plus non-secret provenance and response hashes.
 
+P6.3 adds private watchlist membership linked to the same owner-scoped resolved
+instrument identities. Authenticated clients may select only their own entries
+and cannot write membership directly; authenticated list/add/remove workflows
+use the trusted Python gateway. Invalid, unsupported, ambiguous, duplicate,
+temporarily unavailable, and provider-disabled resolutions remain distinct.
+The portfolio-candidate read uses the latest immutable financial snapshot,
+preserves its exact source instrument ID and evidence event IDs, and refuses to
+infer an ISIN from a broker symbol. The runtime resolver is disabled by default,
+so no provider call or credential is introduced by this issue.
+
 To run the approved local-Supabase integration suite after starting the stack
 and applying migrations, run from the repository root:
 
@@ -126,8 +136,8 @@ pnpm run test:api:local-supabase
 ```
 
 The command deliberately enumerates the owner/RLS, manual-account,
-immutable-snapshot, and private market-data suites. This keeps the financial
-and security boundary explicit while ensuring every test requires the
+immutable-snapshot, private market-data, and watchlist suites. This keeps the
+financial and security boundary explicit while ensuring every test requires the
 `PIA_RUN_LOCAL_SUPABASE_TESTS` opt-in and uses only ephemeral local-Supabase
 data.
 
