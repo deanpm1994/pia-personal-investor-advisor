@@ -1,0 +1,37 @@
+name: Controlled Market EOD
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: controlled-market-eod
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+      - uses: astral-sh/setup-uv@v8.3.2
+        with:
+          version: 0.7.16
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - run: uv sync --locked --directory apps/api
+      - name: Fetch approved daily observations
+        env:
+          PIA_ENVIRONMENT: production
+          PIA_DATABASE_URL: ${{ secrets.PIA_DATABASE_URL }}
+          PIA_MARKETSTACK_ENABLED: ${{ vars.PIA_MARKET_EOD_ENABLED == 'true' && 'true' || 'false' }}
+          PIA_MARKETSTACK_ACCESS_KEY: ${{ secrets.PIA_MARKETSTACK_ACCESS_KEY }}
+          PIA_MARKET_EOD_OWNER_ID: ${{ secrets.PIA_MARKET_EOD_OWNER_ID }}
+        run: uv run --directory apps/api python -m pia_api.jobs.market_eod

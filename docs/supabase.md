@@ -128,6 +128,39 @@ preserves its exact source instrument ID and evidence event IDs, and refuses to
 infer an ISIN from a broker symbol. The runtime resolver is disabled by default,
 so no provider call or credential is introduced by this issue.
 
+P6.4 adds a server-only scheduled Marketstack EOD adapter. It has no HTTP or
+browser entry point and remains disabled unless all four controls agree: the
+deployment variable `PIA_MARKET_EOD_ENABLED`, `PIA_MARKETSTACK_ENABLED`, a
+current database licensing review, and the versioned founder-risk attestation
+from ADR 0009. The control job runs daily at 06:00 UTC so disablement cleanup
+occurs within 24 hours; Tuesday through Saturday it requests the previous
+weekday for at most three eligible watchlist/portfolio instruments,
+and stores normalized as-traded OHLCV with provenance through the trusted
+market-data gateway.
+It reserves no more than 72 routine requests and 28 retry requests from the
+100-request monthly allowance. Retries are bounded to three attempts with
+backoff and jitter; malformed, incomplete, disabled, expired-review, outage,
+and quota states are persisted as diagnostics. Identical observations are
+reused, provider corrections append revisions, and the existing 400-day
+retention ceiling applies.
+
+Hosted setup requires server-side secrets named `PIA_DATABASE_URL`,
+`PIA_MARKETSTACK_ACCESS_KEY`, and `PIA_MARKET_EOD_OWNER_ID`, plus the repository
+variable `PIA_MARKET_EOD_ENABLED=true`. Before enabling it, a trusted database
+operator must set the owner's `market_provider_access` row to `enabled`, set a
+licensing review due date no more than 90 days after review, and atomically
+record `risk_attestation_version='adr-0009-founder-risk-v1'` with
+`risk_attested_at`. Set `access_status='provider_disabled'` and
+`risk_withdrawn_at` together to withdraw consent. Removing the key or either
+enablement variable also stops new provider calls. Keep the scheduled workflow
+running after disablement: it deletes Marketstack bars from active storage on
+its next daily run and deletes expired bars during enabled runs. Ingestion-run
+diagnostics, hashes, and non-price provenance remain as audit evidence. Backup
+purging remains a separately reviewed infrastructure operation as required by
+ADR 0009. The server entry point can be invoked with `pnpm market:eod`; its
+output contains only run counts, status, and stable diagnostics, never
+credentials or provider payloads.
+
 To run the approved local-Supabase integration suite after starting the stack
 and applying migrations, run from the repository root:
 
@@ -136,10 +169,10 @@ pnpm run test:api:local-supabase
 ```
 
 The command deliberately enumerates the owner/RLS, manual-account,
-immutable-snapshot, private market-data, and watchlist suites. This keeps the
-financial and security boundary explicit while ensuring every test requires the
-`PIA_RUN_LOCAL_SUPABASE_TESTS` opt-in and uses only ephemeral local-Supabase
-data.
+immutable-snapshot, private market-data, watchlist, and scheduled-ingestion
+suites. This keeps the financial and security boundary explicit while ensuring
+every test requires the `PIA_RUN_LOCAL_SUPABASE_TESTS` opt-in and uses only
+ephemeral local-Supabase data.
 
 ## Pull-request security integration
 

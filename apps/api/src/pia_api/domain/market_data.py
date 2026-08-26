@@ -146,6 +146,15 @@ class FreshnessStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class FetchStatus(StrEnum):
+    COMPLETED = "completed"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    PROVIDER_DISABLED = "provider_disabled"
+    LICENSE_REVIEW_REQUIRED = "license_review_required"
+    QUOTA_EXHAUSTED = "quota_exhausted"
+
+
 class DiagnosticSeverity(StrEnum):
     INFO = "info"
     WARNING = "warning"
@@ -168,6 +177,17 @@ class DiagnosticCode(StrEnum):
     FUTURE_DATA = "MARKET_BAR_FUTURE_DATA"
     MISSING_DATA = "MARKET_BAR_MISSING_DATA"
     STALE_DATA = "MARKET_BAR_STALE_DATA"
+    PROVIDER_TIMEOUT = "MARKET_PROVIDER_TIMEOUT"
+    RATE_LIMITED = "MARKET_PROVIDER_RATE_LIMITED"
+    PROVIDER_SERVER_ERROR = "MARKET_PROVIDER_SERVER_ERROR"
+    PROVIDER_REQUEST_REJECTED = "MARKET_PROVIDER_REQUEST_REJECTED"
+    MALFORMED_RESPONSE = "MARKET_PROVIDER_MALFORMED_RESPONSE"
+    INCOMPLETE_RESPONSE = "MARKET_PROVIDER_INCOMPLETE_RESPONSE"
+    QUOTA_EXHAUSTED = "MARKET_PROVIDER_QUOTA_EXHAUSTED"
+    PROVIDER_DISABLED = "MARKET_PROVIDER_DISABLED"
+    LICENSE_REVIEW_REQUIRED = "MARKET_PROVIDER_LICENSE_REVIEW_REQUIRED"
+    ACTIVE_INSTRUMENT_CAP = "MARKET_ACTIVE_INSTRUMENT_CAP"
+    PROVIDER_CONTENT_PURGED = "MARKET_PROVIDER_CONTENT_PURGED"
 
 
 class InstrumentIdentity(MarketDataContract):
@@ -380,6 +400,7 @@ class FetchOutcome(MarketDataContract):
     request_parameters: dict[str, str]
     response_sha256: Sha256
     completeness_status: CompletenessStatus
+    status: FetchStatus = FetchStatus.COMPLETED
     quota_state: QuotaState
     bars: tuple[DailyBar, ...] = ()
     diagnostics: tuple[MarketDiagnostic, ...] = ()
