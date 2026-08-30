@@ -144,6 +144,18 @@ and quota states are persisted as diagnostics. Identical observations are
 reused, provider corrections append revisions, and the existing 400-day
 retention ceiling applies.
 
+P6.6 adds authenticated `GET /v1/market/analysis` reads over persisted data
+only. The trusted gateway uses an owner-filtered, repeatable-read transaction,
+rechecks provider access, licensing review, retention, and Marketstack founder
+attestation before returning provider Content, and never invokes an adapter.
+The response combines resolved watchlist and latest-snapshot portfolio
+identities with EOD bars, deterministic indicators, source attribution,
+freshness/completeness diagnostics, and snapshot evidence. Native position
+value and unrealized performance are emitted as Decimal strings only when FIFO
+lot quantity reconciles exactly and every basis currency matches the listing's
+quote currency; otherwise valuation is explicitly withheld without FX
+inference.
+
 Hosted setup requires server-side secrets named `PIA_DATABASE_URL`,
 `PIA_MARKETSTACK_ACCESS_KEY`, and `PIA_MARKET_EOD_OWNER_ID`, plus the repository
 variable `PIA_MARKET_EOD_ENABLED=true`. Before enabling it, a trusted database
@@ -170,7 +182,8 @@ pnpm run test:api:local-supabase
 
 The command deliberately enumerates the owner/RLS, manual-account,
 immutable-snapshot, private market-data, watchlist, and scheduled-ingestion
-suites. This keeps the financial and security boundary explicit while ensuring
+suites, including authenticated market-analysis reads. This keeps the
+financial and security boundary explicit while ensuring
 every test requires the `PIA_RUN_LOCAL_SUPABASE_TESTS` opt-in and uses only
 ephemeral local-Supabase data.
 
