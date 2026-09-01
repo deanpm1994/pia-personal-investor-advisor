@@ -13,6 +13,7 @@ from pia_api.core.auth import SupabaseJWTVerifier
 from pia_api.core.config import Settings
 from pia_api.services.financial_snapshots import TrustedSnapshotGateway
 from pia_api.services.manual_accounts import TrustedManualAccountGateway
+from pia_api.services.market_analysis import TrustedMarketAnalysisGateway
 from pia_api.services.market_watchlist import TrustedMarketWatchlistGateway
 from pia_api.services.staged_imports import SupabaseStagedImportGateway
 
@@ -25,6 +26,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.import_gateway = SupabaseStagedImportGateway(app.state.settings)
     app.state.manual_account_gateway = TrustedManualAccountGateway(app.state.settings)
     app.state.financial_picture_gateway = TrustedSnapshotGateway(app.state.settings)
+    app.state.market_analysis_gateway = TrustedMarketAnalysisGateway(app.state.settings)
     app.state.market_watchlist_gateway = TrustedMarketWatchlistGateway(
         app.state.settings
     )
