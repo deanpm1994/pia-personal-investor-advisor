@@ -210,8 +210,8 @@ export function FinancialDashboard() {
             Portfolio and savings
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">
-            Your recorded accounting picture, in native currencies. Market value and unrealized performance arrive only
-            after market-data support is added.
+            Your recorded accounting picture, in native currencies. Market analysis below uses stored EOD evidence and
+            stays separate from immutable accounting snapshots.
           </p>
         </div>
         <button
