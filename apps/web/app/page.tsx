@@ -18,6 +18,7 @@ const foundations = [
 import { AuthPanel } from "@/components/auth-panel";
 import { FinancialDashboard } from "@/components/financial-dashboard";
 import { ImportReview } from "@/components/import-review";
+import { MarketAnalysis } from "@/components/market-analysis";
 
 export default function Home() {
   return (
@@ -56,6 +57,7 @@ export default function Home() {
 
         <main className="min-w-0 flex-1" id="overview">
           <FinancialDashboard />
+          <MarketAnalysis />
           <ImportReview />
 
           <section aria-labelledby="foundation-heading" className="mt-6 sm:mt-8">

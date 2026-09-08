@@ -8,6 +8,7 @@ describe("Home", () => {
     render(<Home />);
 
     expect(screen.getByRole("heading", { name: "Portfolio and savings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Market analysis" })).toBeInTheDocument();
     expect(screen.getByText("Foundation")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Portfolio" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Insights" })).toBeInTheDocument();
