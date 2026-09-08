@@ -307,6 +307,10 @@ def test_schedule_target_and_marketstack_access_fail_closed() -> None:
         "risk_attested_at": now - timedelta(days=1),
     }
     assert _provider_access(accepted, now) is ProviderAccessStatus.ENABLED
+    assert (
+        _provider_access(accepted, now, marketstack_runtime_enabled=False)
+        is ProviderAccessStatus.PROVIDER_DISABLED
+    )
     expired = {**accepted, "license_review_due_at": now}
     assert (
         _provider_access(expired, now) is ProviderAccessStatus.LICENSE_REVIEW_REQUIRED

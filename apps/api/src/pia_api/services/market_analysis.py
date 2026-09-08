@@ -63,6 +63,12 @@ class TrustedMarketAnalysisGateway:
         self._database_url = settings.database_url.replace(
             "postgresql+psycopg://", "postgresql://", 1
         )
+        access_key = settings.marketstack_access_key
+        self._marketstack_runtime_enabled = bool(
+            settings.marketstack_enabled
+            and access_key is not None
+            and access_key.get_secret_value()
+        )
 
     async def list_analysis(self, user: AuthenticatedUser) -> list[dict[str, object]]:
         return await asyncio.to_thread(self._list_analysis, user.id)
@@ -93,7 +99,13 @@ class TrustedMarketAnalysisGateway:
                         position = positions.get(instrument.isin)
                         if position is not None:
                             matched_position_ids.add(instrument.isin)
-                        access = _provider_access(row, now)
+                        access = _provider_access(
+                            row,
+                            now,
+                            marketstack_runtime_enabled=(
+                                self._marketstack_runtime_enabled
+                            ),
+                        )
                         bars = (
                             _bars(connection, owner_id, instrument)
                             if access is ProviderAccessStatus.ENABLED
@@ -434,7 +446,14 @@ def _instrument(row: dict[str, object]) -> AnalysisInstrument:
     )
 
 
-def _provider_access(row: dict[str, object], now: datetime) -> ProviderAccessStatus:
+def _provider_access(
+    row: dict[str, object],
+    now: datetime,
+    *,
+    marketstack_runtime_enabled: bool = True,
+) -> ProviderAccessStatus:
+    if row["provider"] == "marketstack" and not marketstack_runtime_enabled:
+        return ProviderAccessStatus.PROVIDER_DISABLED
     raw_status = row.get("access_status")
     if raw_status == ProviderAccessStatus.LICENSE_REVIEW_REQUIRED.value:
         return ProviderAccessStatus.LICENSE_REVIEW_REQUIRED
