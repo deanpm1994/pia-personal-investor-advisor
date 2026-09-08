@@ -13,7 +13,10 @@ from psycopg.types.json import Jsonb
 
 from pia_api.core.auth import AuthenticatedUser
 from pia_api.core.config import Settings
-from pia_api.services.market_analysis import TrustedMarketAnalysisGateway
+from pia_api.services.market_analysis import (
+    TrustedMarketAnalysisGateway,
+    _target_market_date,
+)
 
 pytestmark = pytest.mark.local_supabase
 
@@ -56,7 +59,7 @@ def _insert_auth_user(connection, user_id: uuid.UUID) -> None:
 
 def _seed_analysis(connection, owner_id: uuid.UUID) -> None:
     today = datetime.now(UTC).date()
-    days = _weekdays(20, today)
+    days = _weekdays(20, _target_market_date(today))
     instrument_id = connection.execute(
         """
         INSERT INTO public.market_instruments (
