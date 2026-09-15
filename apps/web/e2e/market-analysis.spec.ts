@@ -107,6 +107,28 @@ function item(sourceKind: "portfolio" | "watchlist", name: string, isin: string)
   };
 }
 
+function degradedItem(
+  state: "stale" | "incomplete" | "unavailable" | "unsupported" | "provider_disabled",
+  name: string,
+  isin: string,
+) {
+  const base = item("portfolio", name, isin);
+  const retainsEvidence = state === "stale" || state === "incomplete";
+  return {
+    ...base,
+    state,
+    bars: retainsEvidence ? base.bars : [],
+    indicators: retainsEvidence ? base.indicators : [],
+    source: retainsEvidence ? base.source : null,
+    freshness: { status: state === "stale" ? "stale" : "unavailable" },
+    completeness: {
+      status: state === "incomplete" ? "incomplete" : state === "stale" ? "complete" : "unavailable",
+    },
+    valuation: null,
+    diagnostics: [{ code: `SYNTHETIC_${state.toUpperCase()}`, evidence_event_ids: [] }],
+  };
+}
+
 async function authenticate(page: Page) {
   await page.addInitScript(
     ({ key, session }) => window.localStorage.setItem(key, JSON.stringify(session)),
@@ -137,6 +159,10 @@ async function openAnalysis(page: Page) {
 }
 
 test("renders authenticated synthetic market charts and an accessible data alternative", async ({ page }) => {
+  const providerRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/marketstack|openfigi/i.test(request.url())) providerRequests.push(request.url());
+  });
   const tokens = await openAnalysis(page);
 
   await expect(page.getByRole("heading", { name: "Market analysis", exact: true })).toBeVisible();
@@ -150,6 +176,7 @@ test("renders authenticated synthetic market charts and an accessible data alter
   await tableToggle.click();
   await expect(page.getByRole("table", { name: "Synthetic Equity daily market data" })).toContainText("105.500000000000");
   await expect(page.getByRole("table", { name: "Synthetic Equity daily market data" })).toContainText("Insufficient history (2/50)");
+  expect(providerRequests).toEqual([]);
 });
 
 test("supports keyboard view switching with visible focus on mobile and desktop", async ({ page }) => {
@@ -165,4 +192,40 @@ test("supports keyboard view switching with visible focus on mobile and desktop"
   await expect(watchlist).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel", { name: "Watchlist" })).toContainText("Synthetic Watchlist Fund");
   await expect(page.getByRole("status").filter({ hasText: "Showing 1 watchlist instrument" })).toBeAttached();
+
+  const chart = page.getByRole("img", { name: /Synthetic Watchlist Fund daily price chart/ });
+  await chart.focus();
+  await expect(chart).toBeFocused();
+  await expect(chart).toHaveCSS("outline-width", "3px");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("renders stale, partial, failed, unsupported, and disabled analysis without presenting it as fresh", async ({ page }) => {
+  await authenticate(page);
+  await page.route(`${apiUrl}/v1/financial-picture`, (route) => route.fulfill({ status: 404 }));
+  await page.route(`${apiUrl}/v1/market/analysis`, (route) => route.fulfill({
+    body: JSON.stringify({
+      state: "ready",
+      items: [
+        degradedItem("stale", "Synthetic Stale Equity", "US0000000002"),
+        degradedItem("incomplete", "Synthetic Partial Equity", "US0000000010"),
+        degradedItem("unavailable", "Synthetic Provider Outage", "US0000000028"),
+        degradedItem("unsupported", "Synthetic Unsupported Bond", "US0000000036"),
+        degradedItem("provider_disabled", "Synthetic Disabled Equity", "US0000000044"),
+      ],
+    }),
+    contentType: "application/json",
+    headers: { "access-control-allow-origin": "*" },
+  }));
+
+  await page.goto("/");
+
+  await expect(page.getByRole("status").filter({ hasText: "Price history is stale" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Price history is incomplete" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Price history is unavailable" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Instrument is unsupported" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Market-data provider is disabled" })).toBeVisible();
+  await expect(page.getByText("Stale · Complete")).toBeVisible();
+  await expect(page.getByText("Unavailable · Incomplete")).toBeVisible();
+  await expect(page.getByText("Fresh · Complete")).toHaveCount(0);
 });
